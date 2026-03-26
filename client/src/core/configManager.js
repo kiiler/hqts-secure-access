@@ -41,6 +41,9 @@ class ConfigManager {
   constructor() {
     this.config = null
     this.serverVersion = null
+    this.lastFetchTime = null
+    this.fetchInterval = 5 * 60 * 1000 // 默认 5 分钟
+    this.fetchTimer = null
     
     // 存储路径
     this.storageDir = join(app.getPath('userData'), 'config')
@@ -52,6 +55,49 @@ class ConfigManager {
     
     // 加载缓存配置
     this.loadCachedConfig()
+  }
+
+  /**
+   * 启动定时拉取配置
+   * @param {string} accessToken
+   * @param {number} intervalMs 拉取间隔（毫秒），默认5分钟
+   */
+  startPeriodicFetch(accessToken, intervalMs = 5 * 60 * 1000) {
+    this.fetchInterval = intervalMs
+    log.info(`Starting periodic config fetch, interval: ${intervalMs / 1000}s`)
+
+    // 立即拉取一次
+    this.loadConfig(accessToken)
+
+    // 清除已有定时器
+    this.stopPeriodicFetch()
+
+    // 设置定时器
+    this.fetchTimer = setInterval(async () => {
+      log.info('Periodic config fetch triggered')
+      try {
+        const success = await this.loadConfig(accessToken)
+        if (success) {
+          // 触发配置更新事件
+          if (this.onConfigUpdate) {
+            this.onConfigUpdate(this.config)
+          }
+        }
+      } catch (error) {
+        log.error('Periodic fetch failed:', error)
+      }
+    }, this.fetchInterval)
+  }
+
+  /**
+   * 停止定时拉取
+   */
+  stopPeriodicFetch() {
+    if (this.fetchTimer) {
+      clearInterval(this.fetchTimer)
+      this.fetchTimer = null
+      log.info('Periodic config fetch stopped')
+    }
   }
 
   /**
@@ -95,24 +141,46 @@ class ConfigManager {
     try {
       log.info('Fetching config from server...')
       
-      // TODO: 替换为实际的Config Center地址
-      const response = await fetch('https://config.hqts.cn/config', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      })
+      // 并行拉取配置和节点健康状态
+      const [configRes, healthRes] = await Promise.all([
+        fetch('https://config.hqts.cn/api/v1/config', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+          }
+        }),
+        fetch('https://config.hqts.cn/api/v1/nodes/health', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+          }
+        })
+      ])
 
-      if (!response.ok) {
-        if (response.status === 304) {
-          log.info('Config not modified, using cached version')
-          return true
-        }
-        throw new Error(`Config fetch failed: ${response.status}`)
+      // 如果 token 过期
+      if (configRes.status === 401) {
+        log.warn('Token expired during config fetch')
+        return false
       }
 
-      const newConfig = await response.json()
+      if (!configRes.ok && configRes.status !== 304) {
+        throw new Error(`Config fetch failed: ${configRes.status}`)
+      }
+
+      // 如果配置未变更
+      if (configRes.status === 304) {
+        log.info('Config not modified, using cached version')
+        // 仍然尝试更新节点健康状态
+        if (healthRes.ok) {
+          const healthData = await healthRes.json()
+          this.updateNodeHealth(healthData.health)
+        }
+        return true
+      }
+
+      const newConfig = await configRes.json()
       const newVersion = newConfig.version
 
       // 版本比较
@@ -126,9 +194,16 @@ class ConfigManager {
         throw new Error('Invalid config from server')
       }
 
+      // 更新节点健康状态
+      if (healthRes.ok) {
+        const healthData = await healthRes.json()
+        this.updateNodeHealth(healthData.health)
+      }
+
       // 更新配置
       this.config = newConfig
       this.serverVersion = newVersion
+      this.lastFetchTime = Date.now()
       this.saveCachedConfig()
 
       log.info('Config updated successfully, version:', newVersion)
@@ -142,6 +217,39 @@ class ConfigManager {
       }
       return false
     }
+  }
+
+  /**
+   * 更新节点健康状态
+   * @param {Array} healthList - 节点健康状态列表
+   */
+  updateNodeHealth(healthList) {
+    if (!healthList || !Array.isArray(healthList)) return
+
+    for (const health of healthList) {
+      if (this.config && this.config.nodes) {
+        const node = this.config.nodes.find(n => n.id === health.node_id)
+        if (node) {
+          node.online = health.online
+          node.latency = health.latency
+          node.load = health.load
+        }
+      }
+    }
+    log.info('Node health updated')
+  }
+
+  /**
+   * 获取可用的（健康的）节点列表
+   */
+  getHealthyNodes() {
+    if (!this.config || !this.config.nodes) {
+      return []
+    }
+    // 过滤出在线节点，并按优先级排序
+    return this.config.nodes
+      .filter(n => n.online !== false) // online 默认为 true
+      .sort((a, b) => a.priority - b.priority)
   }
 
   /**

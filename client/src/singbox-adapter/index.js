@@ -134,13 +134,21 @@ class SingboxAdapter {
       })
 
       let stderrData = ''
+      let stdoutData = ''
+      let startTimeout = null
 
       this.process.stderr.on('data', (data) => {
-        stderrData += data.toString()
+        const text = data.toString()
+        stderrData += text
+        // 监听错误关键词
+        if (text.match(/connection refused|timeout|dial error/i)) {
+          log.warn('[sing-box] Connection error detected:', text.substring(0, 100))
+        }
       })
 
       this.process.stdout.on('data', (data) => {
         const line = data.toString().trim()
+        stdoutData += line + '\n'
         if (line) {
           log.info('[sing-box]', line)
         }
@@ -149,6 +157,7 @@ class SingboxAdapter {
       this.process.on('error', (error) => {
         log.error('sing-box process error:', error)
         this.isRunning = false
+        if (startTimeout) clearTimeout(startTimeout)
         reject(error)
       })
 
@@ -156,23 +165,30 @@ class SingboxAdapter {
         log.info(`sing-box exited with code ${code}, signal ${signal}`)
         this.isRunning = false
         this.process = null
+        // 触发退出事件，供上层处理故障转移
+        if (this.onExit) {
+          this.onExit(code, signal)
+        }
       })
 
       // 等待一小段时间确认启动成功
-      setTimeout(() => {
+      startTimeout = setTimeout(() => {
         if (this.process && !this.process.killed) {
           this.isRunning = true
+          this.lastStartTime = Date.now()
           log.info('sing-box started successfully')
           resolve(true)
         } else {
           // 检查错误信息
           if (stderrData.includes('not found') || stderrData.includes('cannot')) {
             reject(new Error('sing-box binary not found or not executable'))
+          } else if (stderrData.match(/connection refused|timeout/i)) {
+            reject(new Error('NODE_CONNECTION_FAILED'))
           } else {
             reject(new Error(stderrData || 'Failed to start sing-box'))
           }
         }
-      }, 1000)
+      }, 3000) // 增加超时时间到3秒，给节点连接更多时间
     })
   }
 

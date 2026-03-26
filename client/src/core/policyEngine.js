@@ -53,8 +53,9 @@ class PolicyEngine {
     this.currentMode = mode
     log.info(`Compiling sing-box config for mode: ${mode}`)
 
-    // 选择最优节点（这里简单选择最高优先级的节点）
+    // 选择最优节点（带健康检查）
     const selectedNode = this.selectNode(productConfig.nodes)
+    this.selectedNode = selectedNode // 保存当前节点引用
     log.info(`Selected node: ${selectedNode.id} (${selectedNode.host})`)
 
     // 根据模式编译配置
@@ -70,13 +71,45 @@ class PolicyEngine {
   }
 
   /**
-   * 选择节点（简单策略：选择最高优先级且可用的节点）
+   * 选择节点（带健康检查的策略）
+   * 1. 过滤在线节点
+   * 2. 按优先级排序
+   * 3. 可选的故障转移逻辑
    * @param {Array} nodes - 节点列表
    */
   selectNode(nodes) {
+    if (!nodes || nodes.length === 0) {
+      throw new Error('No nodes available')
+    }
+
+    // 过滤在线节点（online !== false）
+    const healthyNodes = nodes.filter(n => n.online !== false)
+
+    if (healthyNodes.length === 0) {
+      // 没有健康节点，使用所有节点（可能是本地缓存没有健康状态）
+      log.warn('No healthy nodes found, using all available nodes')
+      const sorted = [...nodes].sort((a, b) => a.priority - b.priority)
+      return sorted[0]
+    }
+
     // 按优先级排序，选择第一个
-    const sorted = [...nodes].sort((a, b) => a.priority - b.priority)
-    return sorted[0]
+    const sorted = [...healthyNodes].sort((a, b) => a.priority - b.priority)
+    const selected = sorted[0]
+    log.info(`Selected node: ${selected.id} (${selected.host}), latency: ${selected.latency || 'unknown'}ms`)
+    return selected
+  }
+
+  /**
+   * 选择备用节点（用于故障转移）
+   * @param {Array} nodes - 节点列表
+   * @param {string} excludeId - 排除的节点ID
+   */
+  selectBackupNode(nodes, excludeId) {
+    const candidates = nodes.filter(n => n.id !== excludeId && n.online !== false)
+    if (candidates.length === 0) {
+      return null
+    }
+    return candidates.sort((a, b) => a.priority - b.priority)[0]
   }
 
   /**
@@ -354,6 +387,13 @@ class PolicyEngine {
    */
   getCurrentMode() {
     return this.currentMode
+  }
+
+  /**
+   * 获取当前选中的节点ID
+   */
+  getCurrentNodeId() {
+    return this.selectedNode?.id || null
   }
 
   /**

@@ -299,13 +299,81 @@ class HQTSClient {
       throw new Error('Not logged in')
     }
 
+    // 确保有配置
+    if (!this.configManager.getConfig()) {
+      await this.configManager.loadConfig(this.authManager.getAccessToken())
+    }
+
     const config = await this.policyEngine.compileConfig(
       this.currentMode,
       this.configManager.getConfig()
     )
-    await this.singboxAdapter.start(config)
-    this.isConnected = true
-    this.notifyStatus()
+    
+    try {
+      await this.singboxAdapter.start(config)
+      this.isConnected = true
+      this.notifyStatus()
+      
+      // 启动定时拉取配置（每5分钟）
+      this.configManager.startPeriodicFetch(
+        this.authManager.getAccessToken(),
+        5 * 60 * 1000
+      )
+    } catch (error) {
+      if (error.message === 'NODE_CONNECTION_FAILED') {
+        log.warn('Node connection failed, attempting failover...')
+        await this.handleFailover()
+      } else {
+        throw error
+      }
+    }
+  }
+
+  /**
+   * 处理故障转移
+   * 当当前节点连接失败时，自动切换到下一个可用节点
+   */
+  async handleFailover() {
+    const nodes = this.configManager.getHealthyNodes()
+    const currentConfig = this.configManager.getConfig()
+    
+    if (!currentConfig || !currentConfig.nodes || currentConfig.nodes.length <= 1) {
+      log.error('Failover failed: only one node available')
+      throw new Error('All nodes unavailable')
+    }
+
+    // 获取备用节点
+    const currentNodeId = this.policyEngine.getCurrentNodeId()
+    const backupNode = this.policyEngine.selectBackupNode(nodes, currentNodeId)
+
+    if (!backupNode) {
+      log.error('Failover failed: no backup node available')
+      throw new Error('All nodes unavailable')
+    }
+
+    log.info(`Failover: switching from ${currentNodeId} to ${backupNode.id}`)
+
+    // 更新配置，替换节点
+    const failoverConfig = {
+      ...currentConfig,
+      nodes: currentConfig.nodes.map(n => 
+        n.id === backupNode.id ? { ...n, online: true } : n
+      )
+    }
+
+    // 重新编译并启动
+    const config = await this.policyEngine.compileConfig(this.currentMode, failoverConfig)
+    
+    try {
+      await this.singboxAdapter.start(config)
+      this.isConnected = true
+      this.notifyStatus()
+      log.info('Failover successful')
+    } catch (error) {
+      log.error('Failover failed:', error)
+      // 递归尝试下一个节点（最多3次）
+      await this.handleFailover()
+    }
   }
 
   async stop() {
