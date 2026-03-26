@@ -5,6 +5,7 @@ import { ConfigManager } from '../core/configManager'
 import { PolicyEngine } from '../core/policyEngine'
 import { NodeHealthMonitor } from '../core/nodeHealthMonitor'
 import { SingboxAdapter } from '../singbox-adapter'
+import { AutoUpdater } from '../core/autoUpdater'
 import log from 'electron-log'
 
 // 配置日志
@@ -29,11 +30,29 @@ class HQTSClient {
     this.policyEngine = new PolicyEngine()
     this.nodeHealthMonitor = new NodeHealthMonitor()
     this.singboxAdapter = new SingboxAdapter()
+    this.autoUpdater = new AutoUpdater()
     this.isConnected = false
     this.currentMode = 'BYPASS_CN'
-    
+
     // 设置节点健康监控回调
     this.setupHealthMonitorCallbacks()
+
+    // 设置自动更新回调
+    this.setupAutoUpdaterCallbacks()
+  }
+
+  setupAutoUpdaterCallbacks() {
+    this.autoUpdater.onUpdateAvailable = (info) => {
+      log.info('Update available:', info.version)
+      // 通知UI有可用更新
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('update:available', info)
+      }
+    }
+
+    this.autoUpdater.onUpdateError = (error) => {
+      log.warn('Update check failed:', error.message)
+    }
   }
 
   setupHealthMonitorCallbacks() {
@@ -300,6 +319,25 @@ class HQTSClient {
       const config = this.configManager.getConfig()
       return config?.version || null
     })
+
+    // 获取客户端版本
+    ipcMain.handle('app:version', async () => {
+      return {
+        clientVersion: app.getVersion(),
+        singboxVersion: this.singboxAdapter.getVersion()
+      }
+    })
+
+    // 检查更新
+    ipcMain.handle('app:checkUpdate', async () => {
+      return await this.autoUpdater.checkForUpdates()
+    })
+
+    // 打开更新下载页面
+    ipcMain.handle('app:downloadUpdate', async (_, url) => {
+      this.autoUpdater.openDownloadPage(url)
+      return { success: true }
+    })
   }
 
   async connect() {
@@ -495,11 +533,15 @@ class HQTSClient {
 // 应用入口
 app.whenReady().then(async () => {
   log.info('HQTS Secure Access Client starting...')
+  log.info('Client version:', app.getVersion())
 
   const client = new HQTSClient()
   await client.createWindow()
   client.createTray()
   client.setupIPC()
+
+  // 启动时检查一次更新
+  client.autoUpdater.startPeriodicCheck()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

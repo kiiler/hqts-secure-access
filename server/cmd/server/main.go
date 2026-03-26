@@ -63,10 +63,12 @@ func main() {
 
 		// 配置中心
 		configGroup := api.Group("/config")
-		configGroup.Use(auth.AuthMiddleware())
 		{
-			configGroup.GET("", config.HandleGetConfig) // 获取用户配置
+			configGroup.GET("", config.HandleGetConfig) // 获取用户配置（需要认证）
 		}
+
+		// 版本信息（公开接口，客户端轮询）
+		api.GET("/version", config.HandleGetVersion) // 获取最新版本（不需要认证）
 
 		// 节点目录
 		nodeGroup := api.Group("/nodes")
@@ -141,6 +143,10 @@ func main() {
 
 			// 统计
 			adminProtected.GET("/stats", admin.HandleGetStats)
+
+			// 版本管理
+			adminProtected.GET("/version", config.HandleGetVersion)
+			adminProtected.POST("/version", config.HandleSetVersion)
 		}
 	}
 

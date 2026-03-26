@@ -6,20 +6,28 @@ import log from 'electron-log'
 
 /**
  * SingboxAdapter - sing-box 运行层适配器
- * 
+ *
  * 职责：
  * - 管理sing-box二进制文件的生命周期
  * - 接收config.json并启动
  * - 提供启停reload能力
  * - 状态查询
+ * - 版本管理
  */
+
+/**
+ * sing-box 版本配置
+ * 注意：必须与服务端节点配置使用的 sing-box 版本兼容
+ */
+const SINGBOX_VERSION = '1.9.4'
+const SINGBOX_DOWNLOAD_BASE = 'https://github.com/SagerNet/sing-box/releases/download'
 
 class SingboxAdapter {
   constructor() {
     this.process = null
     this.configPath = null
     this.isRunning = false
-    
+
     // sing-box二进制路径
     this.binDir = join(app.getPath('userData'), 'bin')
     if (!existsSync(this.binDir)) {
@@ -27,6 +35,13 @@ class SingboxAdapter {
     }
     this.binPath = join(this.binDir, 'sing-box.exe')
     this.configFile = join(app.getPath('userData'), 'config.json')
+  }
+
+  /**
+   * 获取当前 sing-box 版本
+   */
+  getVersion() {
+    return SINGBOX_VERSION
   }
 
   /**
