@@ -3,6 +3,7 @@ import { join } from 'path'
 import { AuthManager, CAS_CONFIG } from '../core/authManager'
 import { ConfigManager } from '../core/configManager'
 import { PolicyEngine } from '../core/policyEngine'
+import { NodeHealthMonitor } from '../core/nodeHealthMonitor'
 import { SingboxAdapter } from '../singbox-adapter'
 import log from 'electron-log'
 
@@ -26,9 +27,36 @@ class HQTSClient {
     this.authManager = new AuthManager()
     this.configManager = new ConfigManager()
     this.policyEngine = new PolicyEngine()
+    this.nodeHealthMonitor = new NodeHealthMonitor()
     this.singboxAdapter = new SingboxAdapter()
     this.isConnected = false
     this.currentMode = 'BYPASS_CN'
+    
+    // 设置节点健康监控回调
+    this.setupHealthMonitorCallbacks()
+  }
+
+  setupHealthMonitorCallbacks() {
+    // 当所有节点不可用时的回调
+    this.nodeHealthMonitor.onAllNodesUnhealthy = async (retryCount) => {
+      log.info(`All nodes unhealthy, retry attempt ${retryCount}`)
+      // 尝试拉取新配置
+      if (this.authManager.isLoggedIn()) {
+        const success = await this.configManager.loadConfig(this.authManager.getAccessToken())
+        if (success) {
+          // 新配置可能包含新节点，重新初始化健康监控
+          const nodes = this.configManager.getAllNodes()
+          this.nodeHealthMonitor.init(nodes)
+          return nodes.length > 0
+        }
+      }
+      return false
+    }
+
+    // 当节点健康状态变化时的回调
+    this.nodeHealthMonitor.onNodeHealthChanged = (healthyNodes) => {
+      log.info('Node health changed, healthy nodes:', healthyNodes.length)
+    }
   }
 
   async createWindow() {
@@ -193,6 +221,7 @@ class HQTSClient {
       try {
         await this.stop()
         await this.authManager.logout()
+        this.nodeHealthMonitor.destroy()
         return { success: true }
       } catch (error) {
         log.error('Logout failed:', error)
@@ -233,7 +262,19 @@ class HQTSClient {
       try {
         log.info(`Switching mode to: ${mode}`)
         this.currentMode = mode
-        const config = await this.policyEngine.compileConfig(mode, this.configManager.getConfig())
+        
+        // 重新选择节点并编译配置
+        const healthyNodes = this.nodeHealthMonitor.getHealthyNodes(this.configManager.getAllNodes())
+        if (healthyNodes.length === 0) {
+          return { success: false, error: 'No healthy nodes available' }
+        }
+        
+        const selectedNode = this.policyEngine.selectNode(healthyNodes)
+        const config = await this.policyEngine.compileConfigWithNode(
+          mode,
+          this.configManager.getConfig(),
+          selectedNode
+        )
         await this.singboxAdapter.reload(config)
         this.notifyStatus()
         return { success: true }
@@ -264,17 +305,49 @@ class HQTSClient {
   async connect() {
     try {
       log.info('Starting VPN connection...')
-      const config = await this.policyEngine.compileConfig(
+      
+      // 获取健康节点列表
+      const nodes = this.configManager.getAllNodes()
+      const healthyNodes = this.nodeHealthMonitor.getHealthyNodes(nodes)
+      
+      if (healthyNodes.length === 0) {
+        // 没有健康节点，开始重试模式
+        log.warn('No healthy nodes, starting retry mode...')
+        this.nodeHealthMonitor.startRetryMode(
+          async () => {
+            await this.configManager.loadConfig(this.authManager.getAccessToken())
+          },
+          this.authManager.getAccessToken()
+        )
+        return { success: false, error: 'No healthy nodes available, retrying...' }
+      }
+      
+      // 选择最优节点并编译配置
+      const selectedNode = this.policyEngine.selectNode(healthyNodes)
+      const config = await this.policyEngine.compileConfigWithNode(
         this.currentMode,
-        this.configManager.getConfig()
+        this.configManager.getConfig(),
+        selectedNode
       )
+      
       await this.singboxAdapter.start(config)
+      this.nodeHealthMonitor.markNodeSuccess(selectedNode.id)
       this.isConnected = true
       this.notifyStatus()
       log.info('VPN connected successfully')
       return { success: true }
     } catch (error) {
       log.error('Connection failed:', error)
+      
+      // 连接失败，标记节点失败
+      const currentNodeId = this.policyEngine.getCurrentNodeId()
+      if (currentNodeId) {
+        this.nodeHealthMonitor.markNodeFailed(currentNodeId)
+      }
+      
+      // 尝试故障转移
+      await this.handleFailover()
+      
       return { success: false, error: error.message }
     }
   }
@@ -284,6 +357,7 @@ class HQTSClient {
       log.info('Stopping VPN connection...')
       await this.singboxAdapter.stop()
       this.isConnected = false
+      this.nodeHealthMonitor.stopRetryMode()
       this.notifyStatus()
       log.info('VPN disconnected')
       return { success: true }
@@ -294,7 +368,7 @@ class HQTSClient {
   }
 
   async start() {
-    // 启动流程：检查token -> 拉取配置 -> 编译config -> 启动sing-box
+    // 启动流程：检查token -> 拉取配置 -> 探测节点健康 -> 选择节点 -> 启动sing-box
     if (!this.authManager.isLoggedIn()) {
       throw new Error('Not logged in')
     }
@@ -304,29 +378,18 @@ class HQTSClient {
       await this.configManager.loadConfig(this.authManager.getAccessToken())
     }
 
-    const config = await this.policyEngine.compileConfig(
-      this.currentMode,
-      this.configManager.getConfig()
+    // 初始化节点健康监控
+    const nodes = this.configManager.getAllNodes()
+    this.nodeHealthMonitor.init(nodes)
+
+    // 启动定时拉取配置（每5分钟）
+    this.configManager.startPeriodicFetch(
+      this.authManager.getAccessToken(),
+      5 * 60 * 1000
     )
-    
-    try {
-      await this.singboxAdapter.start(config)
-      this.isConnected = true
-      this.notifyStatus()
-      
-      // 启动定时拉取配置（每5分钟）
-      this.configManager.startPeriodicFetch(
-        this.authManager.getAccessToken(),
-        5 * 60 * 1000
-      )
-    } catch (error) {
-      if (error.message === 'NODE_CONNECTION_FAILED') {
-        log.warn('Node connection failed, attempting failover...')
-        await this.handleFailover()
-      } else {
-        throw error
-      }
-    }
+
+    // 立即尝试连接
+    await this.connect()
   }
 
   /**
@@ -334,51 +397,57 @@ class HQTSClient {
    * 当当前节点连接失败时，自动切换到下一个可用节点
    */
   async handleFailover() {
-    const nodes = this.configManager.getHealthyNodes()
-    const currentConfig = this.configManager.getConfig()
+    const allNodes = this.configManager.getAllNodes()
+    const healthyNodes = this.nodeHealthMonitor.getHealthyNodes(allNodes)
     
-    if (!currentConfig || !currentConfig.nodes || currentConfig.nodes.length <= 1) {
-      log.error('Failover failed: only one node available')
-      throw new Error('All nodes unavailable')
-    }
-
-    // 获取备用节点
-    const currentNodeId = this.policyEngine.getCurrentNodeId()
-    const backupNode = this.policyEngine.selectBackupNode(nodes, currentNodeId)
-
-    if (!backupNode) {
-      log.error('Failover failed: no backup node available')
-      throw new Error('All nodes unavailable')
-    }
-
-    log.info(`Failover: switching from ${currentNodeId} to ${backupNode.id}`)
-
-    // 更新配置，替换节点
-    const failoverConfig = {
-      ...currentConfig,
-      nodes: currentConfig.nodes.map(n => 
-        n.id === backupNode.id ? { ...n, online: true } : n
+    if (healthyNodes.length === 0) {
+      log.error('Failover failed: no healthy nodes available')
+      // 开始重试模式
+      this.nodeHealthMonitor.startRetryMode(
+        async () => {
+          await this.configManager.loadConfig(this.authManager.getAccessToken())
+        },
+        this.authManager.getAccessToken()
       )
+      return false
     }
+
+    // 获取当前节点ID
+    const currentNodeId = this.policyEngine.getCurrentNodeId()
+    
+    // 找到下一个可用的健康节点
+    const currentIndex = healthyNodes.findIndex(n => n.id === currentNodeId)
+    const nextIndex = (currentIndex + 1) % healthyNodes.length
+    const nextNode = healthyNodes[nextIndex]
+
+    log.info(`Failover: switching from ${currentNodeId} to ${nextNode.id}`)
 
     // 重新编译并启动
-    const config = await this.policyEngine.compileConfig(this.currentMode, failoverConfig)
-    
     try {
+      const config = await this.policyEngine.compileConfigWithNode(
+        this.currentMode,
+        this.configManager.getConfig(),
+        nextNode
+      )
+      
       await this.singboxAdapter.start(config)
+      this.nodeHealthMonitor.markNodeSuccess(nextNode.id)
       this.isConnected = true
       this.notifyStatus()
       log.info('Failover successful')
+      return true
     } catch (error) {
       log.error('Failover failed:', error)
-      // 递归尝试下一个节点（最多3次）
-      await this.handleFailover()
+      // 标记当前节点失败，继续尝试下一个
+      this.nodeHealthMonitor.markNodeFailed(nextNode.id)
+      return await this.handleFailover()
     }
   }
 
   async stop() {
     await this.singboxAdapter.stop()
     this.isConnected = false
+    this.nodeHealthMonitor.stopRetryMode()
     this.notifyStatus()
   }
 
@@ -395,6 +464,7 @@ class HQTSClient {
       singboxInstalled: await this.singboxAdapter.isInstalled(),
       configValid: this.configManager.getConfig() !== null,
       authValid: this.authManager.isLoggedIn(),
+      nodeHealth: this.nodeHealthMonitor.getStatusSummary(),
       dnsLeakTest: 'pending',
       connectionTest: 'pending'
     }

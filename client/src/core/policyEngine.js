@@ -40,7 +40,39 @@ class PolicyEngine {
   }
 
   /**
-   * 编译sing-box配置
+   * 编译sing-box配置（使用指定的健康节点）
+   * @param {string} mode - 分流模式
+   * @param {Object} productConfig - 产品级配置
+   * @param {Object} selectedNode - 已选中的健康节点
+   * @returns {SingboxConfig}
+   */
+  async compileConfigWithNode(mode, productConfig, selectedNode) {
+    if (!productConfig) {
+      throw new Error('Invalid product config')
+    }
+
+    if (!selectedNode) {
+      throw new Error('No node selected')
+    }
+
+    this.currentMode = mode
+    this.selectedNode = selectedNode
+    log.info(`Compiling sing-box config, mode: ${mode}, node: ${selectedNode.id}`)
+
+    // 构建 sing-box 配置
+    const config = {
+      dns: this.buildDNS(mode, productConfig),
+      inbounds: this.buildInbounds(),
+      outbounds: this.buildOutbounds(selectedNode),
+      route: this.buildRoute(mode, selectedNode)
+    }
+
+    log.info('Sing-box config compiled successfully')
+    return config
+  }
+
+  /**
+   * 编译sing-box配置（兼容旧接口，自动选择节点）
    * @param {string} mode - 分流模式
    * @param {Object} productConfig - 产品级配置
    * @returns {SingboxConfig}
@@ -53,7 +85,7 @@ class PolicyEngine {
     this.currentMode = mode
     log.info(`Compiling sing-box config for mode: ${mode}`)
 
-    // 选择最优节点（带健康检查）
+    // 从所有节点中选择（由调用方保证传入健康节点）
     const selectedNode = this.selectNode(productConfig.nodes)
     this.selectedNode = selectedNode // 保存当前节点引用
     log.info(`Selected node: ${selectedNode.id} (${selectedNode.host})`)
@@ -71,45 +103,19 @@ class PolicyEngine {
   }
 
   /**
-   * 选择节点（带健康检查的策略）
-   * 1. 过滤在线节点
-   * 2. 按优先级排序
-   * 3. 可选的故障转移逻辑
-   * @param {Array} nodes - 节点列表
+   * 选择节点（由 NodeHealthMonitor 提供健康节点列表）
+   * 直接从健康节点列表中选择最优节点
+   * @param {Array} healthyNodes - 已经过健康检查的节点列表
    */
-  selectNode(nodes) {
-    if (!nodes || nodes.length === 0) {
-      throw new Error('No nodes available')
+  selectNode(healthyNodes) {
+    if (!healthyNodes || healthyNodes.length === 0) {
+      throw new Error('No healthy nodes available')
     }
 
-    // 过滤在线节点（online !== false）
-    const healthyNodes = nodes.filter(n => n.online !== false)
-
-    if (healthyNodes.length === 0) {
-      // 没有健康节点，使用所有节点（可能是本地缓存没有健康状态）
-      log.warn('No healthy nodes found, using all available nodes')
-      const sorted = [...nodes].sort((a, b) => a.priority - b.priority)
-      return sorted[0]
-    }
-
-    // 按优先级排序，选择第一个
-    const sorted = [...healthyNodes].sort((a, b) => a.priority - b.priority)
-    const selected = sorted[0]
-    log.info(`Selected node: ${selected.id} (${selected.host}), latency: ${selected.latency || 'unknown'}ms`)
+    // healthyNodes 已经按延迟排序，直接取第一个
+    const selected = healthyNodes[0]
+    log.info(`Selected node: ${selected.id} (${selected.host})`)
     return selected
-  }
-
-  /**
-   * 选择备用节点（用于故障转移）
-   * @param {Array} nodes - 节点列表
-   * @param {string} excludeId - 排除的节点ID
-   */
-  selectBackupNode(nodes, excludeId) {
-    const candidates = nodes.filter(n => n.id !== excludeId && n.online !== false)
-    if (candidates.length === 0) {
-      return null
-    }
-    return candidates.sort((a, b) => a.priority - b.priority)[0]
   }
 
   /**
