@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from 'electron'
 import { join } from 'path'
-import { AuthManager } from '../core/authManager'
+import { AuthManager, CAS_CONFIG } from '../core/authManager'
 import { ConfigManager } from '../core/configManager'
 import { PolicyEngine } from '../core/policyEngine'
 import { SingboxAdapter } from '../singbox-adapter'
@@ -107,16 +107,81 @@ class HQTSClient {
   }
 
   setupIPC() {
-    // 登录
-    ipcMain.handle('auth:login', async (_, oauth2Code) => {
+    // 获取 CAS 登录 URL
+    ipcMain.handle('auth:getCasLoginUrl', async () => {
+      return this.authManager.getCasLoginUrl()
+    })
+
+    // 登录 - 在隐藏窗口中打开 CAS 登录页面
+    ipcMain.handle('auth:login', async () => {
       try {
-        log.info('Starting OAuth2 login...')
-        const result = await this.authManager.login(oauth2Code)
-        if (result.success) {
-          await this.configManager.loadConfig(result.accessToken)
-          await this.start()
-        }
-        return result
+        log.info('Starting CAS login...')
+        
+        return new Promise((resolve) => {
+          // 构建 CAS 登录 URL
+          const casLoginUrl = this.authManager.getCasLoginUrl()
+          log.info('Opening CAS login URL:', casLoginUrl)
+          
+          // 创建隐藏的登录窗口
+          const loginWindow = new BrowserWindow({
+            width: 480,
+            height: 640,
+            resizable: false,
+            autoHideMenuBar: true,
+            webPreferences: {
+              sandbox: false,
+              contextIsolation: true,
+              nodeIntegration: false
+            }
+          })
+
+          // 监听 URL 变化，检查是否包含 ticket
+          loginWindow.webContents.on('will-navigate', async (event, url) => {
+            log.info('Login window navigating to:', url)
+            
+            // 检查是否是回调 URL
+            if (url.startsWith(CAS_CONFIG.serviceUrl)) {
+              event.preventDefault()
+              
+              // 从 URL 中提取 ticket
+              const urlObj = new URL(url)
+              const ticket = urlObj.searchParams.get('ticket')
+              
+              if (ticket) {
+                log.info('Got CAS ticket, closing login window...')
+                loginWindow.close()
+                
+                // 处理 ticket
+                try {
+                  const result = await this.authManager.handleCasCallback(ticket)
+                  if (result.success) {
+                    await this.configManager.loadConfig(result.accessToken)
+                    await this.start()
+                    resolve(result)
+                  } else {
+                    resolve(result)
+                  }
+                } catch (error) {
+                  resolve({ success: false, error: error.message })
+                }
+              }
+            }
+          })
+
+          // 登录页面加载完成后检查
+          loginWindow.webContents.on('did-finish-load', () => {
+            log.info('Login window finished loading')
+          })
+
+          // 窗口关闭时，如果还没完成登录，认为用户取消了
+          loginWindow.on('closed', () => {
+            log.info('Login window closed')
+            resolve({ success: false, error: 'Login cancelled' })
+          })
+
+          // 加载 CAS 登录页面
+          loginWindow.loadURL(casLoginUrl)
+        })
       } catch (error) {
         log.error('Login failed:', error)
         return { success: false, error: error.message }

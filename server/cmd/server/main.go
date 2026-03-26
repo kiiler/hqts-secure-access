@@ -50,11 +50,12 @@ func main() {
 		// 认证
 		authGroup := api.Group("/auth")
 		{
-			authGroup.GET("/login", auth.HandleLogin)           // OAuth2 登录入口
-			authGroup.POST("/callback", auth.HandleCallback)    // OAuth2 回调
-			authGroup.POST("/token", auth.HandleToken)          // 获取/刷新 Token
-			authGroup.POST("/logout", auth.HandleLogout)        // 登出
-			authGroup.POST("/revoke", auth.HandleRevoke)         // 撤销 Token
+			authGroup.GET("/login", auth.HandleLogin)              // CAS 登录入口
+			authGroup.GET("/validate", auth.HandleServiceValidate) // CAS Ticket 验证
+			authGroup.POST("/cas/exchange", auth.HandleCasExchange) // CAS Ticket 换取内部 Token
+			authGroup.POST("/token", auth.HandleToken)             // 获取/刷新 Token
+			authGroup.POST("/logout", auth.HandleLogout)            // 登出
+			authGroup.POST("/revoke", auth.HandleRevoke)            // 撤销 Token
 		}
 
 		// 配置中心

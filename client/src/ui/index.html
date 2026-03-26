@@ -401,22 +401,26 @@
       }
     }
 
-    // 登录
+    // 登录 - CAS 认证
     async function handleLogin() {
       if (isLoggingIn) return
       isLoggingIn = true
 
       try {
-        // 启动OAuth2流程 - 这里简化处理，实际应该打开浏览器获取code
-        // 由于是企业应用，简化处理：使用模拟code进行登录
-        const mockCode = 'mock_auth_code_' + Date.now()
+        // 调用 CAS 登录，会打开登录窗口
+        const result = await window.hqtsAPI.auth.login()
         
-        const result = await window.hqtsAPI.auth.login(mockCode)
         if (result.success) {
-          showMainScreen(result.userInfo)
-        } else {
+          // 登录窗口关闭后，验证结果
+          const status = await window.hqtsAPI.auth.status()
+          if (status) {
+            const userInfo = await window.hqtsAPI.auth.getUserInfo()
+            showMainScreen(userInfo)
+          }
+        } else if (result.error && result.error !== 'Login cancelled') {
           alert('登录失败: ' + (result.error || '未知错误'))
         }
+        // 如果是取消，不做处理
       } catch (error) {
         alert('登录异常: ' + error.message)
       } finally {

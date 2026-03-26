@@ -4,7 +4,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('hqtsAPI', {
   // 认证
   auth: {
-    login: (oauth2Code) => ipcRenderer.invoke('auth:login', oauth2Code),
+    // CAS 登录
+    login: () => ipcRenderer.invoke('auth:login'),
     logout: () => ipcRenderer.invoke('auth:logout'),
     status: () => ipcRenderer.invoke('auth:status'),
     getUserInfo: () => ipcRenderer.invoke('auth:userInfo')

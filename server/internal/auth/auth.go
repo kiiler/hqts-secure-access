@@ -18,33 +18,28 @@ import (
 )
 
 /**
- * Auth Service - 认证服务
+ * Auth Service - 认证服务（CAS + JWT）
  * 
  * 职责：
- * - 对接泛微OA OAuth2
- * - JWT Token签发和验证
+ * - CAS Ticket 验证
+ * - JWT Token 签发和验证
  * - Token存储和刷新
  */
 
 var (
-	// 模拟OAuth2配置 - 实际应从环境变量读取
-	oauth2Config = struct {
-		ClientID     string
-		ClientSecret string
-		AuthURL      string
-		TokenURL     string
-		RedirectURI  string
+	// CAS 配置 - 需要替换为实际的泛微OA地址
+	casConfig = struct {
+		CasServerURL string // https://oa.hqts.cn/cas
+		ServiceURL   string // hqts://auth/callback
 	}{
-		ClientID:     "hqts-secure-access-client",
-		ClientSecret: "change-me-in-production",
-		AuthURL:      "https://oauth2.hqts.cn/authorize",
-		TokenURL:     "https://oauth2.hqts.cn/token",
-		RedirectURI:  "hqts://oauth/callback",
+		CasServerURL: "https://oa.hqts.cn/cas",
+		ServiceURL:   "hqts://auth/callback",
 	}
 
 	// JWT配置
 	jwtSecret = []byte("change-jwt-secret-in-production")
 	jwtExpiry = time.Hour * 1 // 1小时
+	refreshExpiry = time.Hour * 24 * 7 // 7天
 
 	// Token存储 (实际应使用Redis)
 	tokenStore = struct {
@@ -63,9 +58,8 @@ type tokenInfo struct {
 
 // 初始化 - 注册模拟用户
 func init() {
-	// 添加一些测试用户
-	storeUser("u001", "zhangsan", "zhangsan@hqts.cn", "CN_EMPLOYEE")
-	storeUser("u002", "lisi", "lisi@hqts.cn", "HK_EMPLOYEE")
+	storeUser("u001", "zhangsan", "张三", "zhangsan@hqts.cn", "CN_EMPLOYEE")
+	storeUser("u002", "lisi", "李四", "lisi@hqts.cn", "HK_EMPLOYEE")
 }
 
 // 存储用户信息
@@ -74,8 +68,8 @@ var mockUsers = map[string]*models.User{
 	"u002": {ID: "u002", Name: "李四", Email: "lisi@hqts.cn", Group: "HK_EMPLOYEE"},
 }
 
-func storeUser(id, name, email, group string) {
-	mockUsers[id] = &models.User{ID: id, Name: name, Email: email, Group: group}
+func storeUser(id, nameCN, name, email, group string) {
+	mockUsers[name] = &models.User{ID: id, Name: nameCN, Email: email, Group: group}
 }
 
 // 生成随机字符串
@@ -85,36 +79,115 @@ func generateRandomString(length int) string {
 	return base64.URLEncoding.EncodeToString(bytes)[:length]
 }
 
-// HandleLogin 处理 OAuth2 登录入口
+// CAS登录入口 - 重定向到CAS登录页
 func HandleLogin(c *gin.Context) {
-	// 生成state防止CSRF
-	state := generateRandomString(32)
+	// 构建CAS登录URL
+	casLoginURL := fmt.Sprintf("%s/login?service=%s",
+		casConfig.CasServerURL,
+		casConfig.ServiceURL)
 
-	// 构建授权URL
-	authURL := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&response_type=code&state=%s",
-		oauth2Config.AuthURL, oauth2Config.ClientID, oauth2Config.RedirectURI, state)
-
-	// 重定向到泛微OA
-	c.Redirect(http.StatusFound, authURL)
+	log.Printf("Redirecting to CAS login: %s", casLoginURL)
+	c.Redirect(http.StatusFound, casLoginURL)
 }
 
-// HandleCallback 处理 OAuth2 回调
-// 注意：实际情况下，泛微OA会回调到这里，我们需要用code换token
-func HandleCallback(c *gin.Context) {
-	code := c.Query("code")
-	state := c.Query("state")
+// CAS Service Validate - 验证ticket并获取用户信息
+// 这个接口供客户端直接调用（票根验证模式）
+func HandleServiceValidate(c *gin.Context) {
+	ticket := c.Query("ticket")
+	service := c.Query("service")
 
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code"})
+	if ticket == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing ticket"})
 		return
 	}
 
-	// 实际场景：在这里用code调用泛微OA获取token
-	// 简化处理：模拟登录成功
-	user := mockUsers["u001"] // 默认第一个用户
+	log.Printf("Validating CAS ticket: %s for service: %s", ticket, service)
 
+	// 实际环境中，需要调用CAS服务器的/serviceValidate接口验证ticket
+	// 这里简化处理：模拟验证成功
+	//
+	// 标准CAS /serviceValidate响应格式：
+	// <cas:serviceResponse xmlns:cas="http://www.yale.edu/tp/cas">
+	//   <cas:authenticationSuccess>
+	//     <cas:user>username</cas:user>
+	//     <cas:attributes>
+	//       <cas:name>Display Name</cas:name>
+	//       <cas:email>user@example.com</cas:email>
+	//     </cas:attributes>
+	//   </cas:authenticationSuccess>
+	// </cas:serviceResponse>
+
+	// 模拟：使用ticket作为用户名（实际应该调用CAS服务器验证）
+	username := "u001" // 模拟用户，实际应该解析CAS响应
+	user := mockUsers[username]
+
+	if user == nil {
+		// 返回CAS失败响应
+		c.JSON(http.StatusOK, gin.H{
+			"serviceResponse": gin.H{
+				"authenticationFailure": gin.H{
+					"code":        "INVALID_TICKET",
+					"description": "Ticket validation failed",
+				},
+			},
+		})
+		return
+	}
+
+	// 返回CAS成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"serviceResponse": gin.H{
+			"authenticationSuccess": gin.H{
+				"user": username,
+				"attributes": gin.H{
+					"name":       user.Name,
+					"email":      user.Email,
+					"department": user.Group,
+				},
+			},
+		},
+	})
+}
+
+// CAS 票根换取内部 Token
+// 客户端调用此接口，用 CAS ticket 换取内部 JWT token
+func HandleCasExchange(c *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Department string `json:"department"`
+		CasTicket string `json:"casTicket"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("CAS exchange for user: %s", req.Username)
+
+	// 实际环境中，应该调用 CAS 服务器验证 ticket
+	// 这里简化处理，假设 ticket 有效
+	
+	// 查找或创建用户
+	user, exists := mockUsers[req.Username]
+	if !exists {
+		// 为新用户创建记录
+		newID := fmt.Sprintf("u%s", req.Username)
+		user = &models.User{
+			ID:       newID,
+			Name:     req.Name,
+			Email:    req.Email,
+			Group:    req.Department,
+		}
+		mockUsers[req.Username] = user
+	}
+
+	// 生成内部 token
 	tokenResp := generateTokenResponse(user)
 
+	log.Printf("Token exchanged successfully for user: %s", user.Name)
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -206,6 +279,11 @@ func generateTokenResponse(user *models.User) models.TokenResponse {
 		refreshToken: refreshToken,
 		expiresAt:    time.Now().Add(jwtExpiry),
 	}
+	// 同时存储refresh token
+	tokenStore.m[refreshToken] = &tokenInfo{
+		userID:    user.ID,
+		expiresAt: time.Now().Add(refreshExpiry),
+	}
 	tokenStore.Unlock()
 
 	return models.TokenResponse{
@@ -246,7 +324,10 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 			c.Set("userID", claims["sub"])
-			c.Set("user", claims["user"])
+			userJSON, _ := json.Marshal(claims["user"])
+			var userInfo models.User
+			json.Unmarshal(userJSON, &userInfo)
+			c.Set("user", &userInfo)
 			c.Next()
 		} else {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
@@ -268,8 +349,5 @@ func GetCurrentUser(c *gin.Context) *models.User {
 	if !exists {
 		return nil
 	}
-	userBytes, _ := json.Marshal(user)
-	var userInfo models.User
-	json.Unmarshal(userBytes, &userInfo)
-	return &userInfo
+	return user.(*models.User)
 }
