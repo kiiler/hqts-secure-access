@@ -361,15 +361,44 @@
     <div class="login-box">
       <h1>管理后台</h1>
       <p>HQTS Secure Access</p>
-      <div class="form-group">
-        <label>用户名</label>
-        <input type="text" id="loginUsername" placeholder="请输入用户名">
+      
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; color: #666;">登录方式</label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button id="tab-admin" class="btn btn-primary" style="flex:1;" onclick="switchLoginTab('admin')">管理员密码</button>
+          <button id="tab-cas" class="btn" style="flex:1;" onclick="switchLoginTab('cas')">企业账号</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>密码</label>
-        <input type="password" id="loginPassword" placeholder="请输入密码">
+
+      <!-- 管理员密码登录 -->
+      <div id="login-admin">
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="loginUsername" placeholder="请输入用户名">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="loginPassword" placeholder="请输入管理员密码">
+        </div>
+        <button class="login-btn" onclick="handleLogin()">登录</button>
       </div>
-      <button class="login-btn" onclick="handleLogin()">登录</button>
+
+      <!-- 企业CAS账号登录 -->
+      <div id="login-cas" style="display:none;">
+        <div class="form-group">
+          <label>企业邮箱</label>
+          <input type="email" id="loginCasEmail" placeholder="如: zhangsan@hqts.cn">
+        </div>
+        <div class="form-group">
+          <label>姓名</label>
+          <input type="text" id="loginCasName" placeholder="请输入姓名">
+        </div>
+        <button class="login-btn" onclick="handleCASLogin()">企业账号登录</button>
+        <p style="font-size: 11px; color: #999; margin-top: 8px; text-align: center;">
+          只有在管理员白名单中的企业账号才能登录
+        </p>
+      </div>
+
       <div id="loginError" class="login-error"></div>
     </div>
   </div>
@@ -389,6 +418,7 @@
         <div class="nav-item active" data-page="dashboard">概览</div>
         <div class="nav-item" data-page="users">用户管理</div>
         <div class="nav-item" data-page="nodes">节点管理</div>
+        <div class="nav-item" data-page="whitelist">管理员白名单</div>
         <div class="nav-item" data-page="audit">审计日志</div>
       </div>
 
@@ -475,6 +505,34 @@
             <div id="auditList"></div>
           </div>
         </div>
+
+        <!-- 管理员白名单 -->
+        <div id="page-whitelist" class="page" style="display:none;">
+          <div class="page-header">
+            <h2>管理员白名单</h2>
+            <button class="btn btn-primary" onclick="showAddWhitelistModal()">添加管理员</button>
+          </div>
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>企业邮箱</th>
+                  <th>添加时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="whitelistTable"></tbody>
+            </table>
+          </div>
+          <div style="margin-top: 16px; padding: 16px; background: #f8f8f8; border-radius: 8px;">
+            <h4 style="margin-bottom: 8px;">说明</h4>
+            <ul style="font-size: 13px; color: #666; line-height: 1.8;">
+              <li>管理员白名单中的企业邮箱可以通过"企业账号"方式登录管理后台</li>
+              <li>这些账号需要先通过企业CAS认证</li>
+              <li>只有管理员才能管理白名单</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -533,6 +591,27 @@
 
   <!-- Toast -->
   <div id="toast" class="toast"></div>
+
+  <!-- 添加管理员模态框 -->
+  <div id="whitelistModal" class="modal">
+    <div class="modal-content" style="width: 400px;">
+      <div class="modal-header">
+        <h3>添加管理员</h3>
+        <button class="modal-close" onclick="closeWhitelistModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>企业邮箱</label>
+        <input type="email" id="whitelistEmail" placeholder="如: zhangsan@hqts.cn">
+      </div>
+      <p style="font-size: 12px; color: #999; margin-bottom: 16px;">
+        该邮箱对应的企业账号将获得管理后台访问权限
+      </p>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeWhitelistModal()">取消</button>
+        <button class="btn btn-primary" onclick="addToWhitelist()">添加</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // API 基础地址
@@ -607,6 +686,59 @@
       }
     }
 
+    // CAS企业账号登录
+    async function handleCASLogin() {
+      const email = document.getElementById('loginCasEmail').value
+      const name = document.getElementById('loginCasName').value
+
+      if (!email || !name) {
+        showError('请输入邮箱和姓名')
+        return
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/cas-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name })
+        })
+
+        const data = await res.json()
+
+        if (data.success) {
+          adminToken = data.token
+          adminUser = data.user
+          localStorage.setItem('adminToken', adminToken)
+          localStorage.setItem('adminUser', JSON.stringify(adminUser))
+          showAdminPage()
+        } else {
+          showError(data.error || '此账号没有管理员权限')
+        }
+      } catch (err) {
+        showError('登录异常: ' + err.message)
+      }
+    }
+
+    // 切换登录标签
+    function switchLoginTab(tab) {
+      const adminTab = document.getElementById('tab-admin')
+      const casTab = document.getElementById('tab-cas')
+      const adminForm = document.getElementById('login-admin')
+      const casForm = document.getElementById('login-cas')
+
+      if (tab === 'admin') {
+        adminTab.className = 'btn btn-primary'
+        casTab.className = 'btn'
+        adminForm.style.display = 'block'
+        casForm.style.display = 'none'
+      } else {
+        adminTab.className = 'btn'
+        casTab.className = 'btn btn-primary'
+        adminForm.style.display = 'none'
+        casForm.style.display = 'block'
+      }
+    }
+
     // 登出
     async function handleLogout() {
       try {
@@ -655,6 +787,7 @@
       if (page === 'users') loadUsers()
       if (page === 'nodes') loadNodes()
       if (page === 'audit') loadAudit()
+      if (page === 'whitelist') loadWhitelist()
       if (page === 'dashboard') loadDashboard()
     }
 
@@ -875,6 +1008,83 @@
         `).join('') || '<div class="loading">暂无日志</div>'
       } catch (err) {
         console.error('Failed to load audit:', err)
+      }
+    }
+
+    // 加载管理员白名单
+    async function loadWhitelist() {
+      try {
+        const res = await fetch(`${API_BASE}/whitelist`, { headers: getAuthHeader() })
+        const data = await res.json()
+        
+        const tbody = document.getElementById('whitelistTable')
+        tbody.innerHTML = data.whitelist?.map(email => `
+          <tr>
+            <td>${email}</td>
+            <td>-</td>
+            <td>
+              <button class="btn btn-sm btn-danger" onclick="removeFromWhitelist('${email}')">移除</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="3">暂无数据</td></tr>'
+      } catch (err) {
+        console.error('Failed to load whitelist:', err)
+      }
+    }
+
+    // 显示添加管理员模态框
+    function showAddWhitelistModal() {
+      document.getElementById('whitelistModal').classList.add('show')
+      document.getElementById('whitelistEmail').value = ''
+    }
+
+    // 关闭添加管理员模态框
+    function closeWhitelistModal() {
+      document.getElementById('whitelistModal').classList.remove('show')
+    }
+
+    // 添加到白名单
+    async function addToWhitelist() {
+      const email = document.getElementById('whitelistEmail').value.trim()
+
+      if (!email) {
+        showToast('请输入邮箱', 'error')
+        return
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/whitelist`, {
+          method: 'POST',
+          headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        })
+
+        const data = await res.json()
+        if (data.success) {
+          showToast('添加成功', 'success')
+          closeWhitelistModal()
+          loadWhitelist()
+        } else {
+          showToast(data.error || '添加失败', 'error')
+        }
+      } catch (err) {
+        showToast('添加失败', 'error')
+      }
+    }
+
+    // 从白名单移除
+    async function removeFromWhitelist(email) {
+      if (!confirm(`确定要移除 ${email} 的管理员权限吗？`)) return
+
+      try {
+        await fetch(`${API_BASE}/whitelist/${encodeURIComponent(email)}`, {
+          method: 'DELETE',
+          headers: getAuthHeader()
+        })
+        showToast('移除成功', 'success')
+        loadWhitelist()
+      } catch (err) {
+        showToast('移除失败', 'error')
       }
     }
   </script>

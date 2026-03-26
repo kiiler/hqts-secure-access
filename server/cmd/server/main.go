@@ -97,7 +97,8 @@ func main() {
 	adminAPI := r.Group("/admin/api/v1")
 	{
 		// 管理员登录（不需要认证）
-		adminAPI.POST("/login", admin.HandleAdminLogin)
+		adminAPI.POST("/login", admin.HandleAdminLogin)          // 独立密码登录
+		adminAPI.POST("/cas-login", admin.HandleCASAdminLogin)   // CAS账号登录（白名单）
 		adminAPI.POST("/logout", admin.HandleAdminLogout)
 
 		// 需要管理员认证的接口
@@ -128,6 +129,14 @@ func main() {
 			auditGroup := adminProtected.Group("/audit")
 			{
 				auditGroup.GET("", admin.HandleAdminAuditList)
+			}
+
+			// 管理员白名单管理
+			whitelistGroup := adminProtected.Group("/whitelist")
+			{
+				whitelistGroup.GET("", admin.HandleGetAdminWhitelist)
+				whitelistGroup.POST("", admin.HandleAddAdminWhitelist)
+				whitelistGroup.DELETE("/:email", admin.HandleRemoveAdminWhitelist)
 			}
 
 			// 统计
