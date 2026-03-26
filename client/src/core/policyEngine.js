@@ -144,7 +144,8 @@ class PolicyEngine {
   }
 
   /**
-   * 构建入站配置
+   * 构建入站配置 - 仅 TUN 模式
+   * 不使用 mixed 模式，因为企业 VPN 需要网络层完整代理
    */
   buildInbounds() {
     return [
@@ -157,17 +158,8 @@ class PolicyEngine {
         'auto_route': true,
         'strict_route': true,
         'dns_independent': true,
-        'inbound': {
-          'tag': 'mixed-in'
-        },
         'sniff': true,
         'sniff_override_destination': true
-      },
-      {
-        'tag': 'mixed-in',
-        'type': 'mixed',
-        'listen': '0.0.0.0',
-        'port': 1080
       }
     ]
   }
@@ -282,21 +274,31 @@ class PolicyEngine {
   }
 
   /**
-   * 全局模式路由
+   * 全局模式路由 (TUN)
+   * 所有流量走代理，仅保留本地网络直连
    */
   buildGlobalRoute() {
     return {
       'rules': [
+        // 本地网络直连
         {
           'type': 'field',
-          'ip_cidr': ['0.0.0.0/8', '10.0.0.0/8', '127.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+          'ip_cidr': ['0.0.0.0/8', '10.0.0.0/8', '127.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '224.0.0.0/4'],
           'outbound': 'direct'
         },
+        // DNS 请求特殊处理
+        {
+          'type': 'field',
+          'port': [53],
+          'outbound': 'dns-out'
+        },
+        // BT 协议直连（可选）
         {
           'type': 'field',
           'protocol': ['bittorrent'],
           'outbound': 'direct'
         },
+        // 默认全部代理
         {
           'type': 'default',
           'outbound': 'proxy'
@@ -307,38 +309,35 @@ class PolicyEngine {
   }
 
   /**
-   * 绕过大陆路由
+   * 绕过大陆路由 (TUN)
+   * 中国IP直连，海外流量走代理
    */
   buildBypassCNRoute() {
     return {
       'rules': [
+        // 本地网络直连
+        {
+          'type': 'field',
+          'ip_cidr': ['0.0.0.0/8', '10.0.0.0/8', '127.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '224.0.0.0/4'],
+          'outbound': 'direct'
+        },
+        // DNS 请求
+        {
+          'type': 'field',
+          'port': [53],
+          'outbound': 'dns-out'
+        },
         // 中国IP直连
         {
           'type': 'field',
-          'geosite': ['geoip-cn'],
+          'geoip': ['cn', 'private'],
           'outbound': 'direct'
         },
-        // 企业域名走代理
-        {
-          'type': 'field',
-          'geosite': ['hqts.cn', 'hqts.com'],
-          'outbound': 'proxy'
-        },
-        // 国内域名直连
-        {
-          'type': 'field',
-          'geosite': ['geosite-cn'],
-          'outbound': 'direct'
-        },
+        // BT 协议直连
         {
           'type': 'field',
           'protocol': ['bittorrent'],
           'outbound': 'direct'
-        },
-        // DNS请求
-        {
-          'type': 'field',
-          'outbound': 'dns-out'
         },
         // 默认走代理
         {
