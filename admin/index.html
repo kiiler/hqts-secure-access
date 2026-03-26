@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HQTS Secure Access - 管理后台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* 登录页 */
+    .login-container {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-box {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      width: 360px;
+    }
+
+    .login-box h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #1a1a2e;
+    }
+
+    .login-box p {
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .login-error {
+      color: #f5576c;
+      margin-top: 12px;
+      text-align: center;
+      display: none;
+    }
+
+    /* 管理后台 */
+    .admin-container {
+      display: none;
+    }
+
+    .header {
+      background: #1a1a2e;
+      color: white;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 18px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logout-btn {
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .main {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* 侧边栏 */
+    .sidebar {
+      width: 200px;
+      background: white;
+      border-right: 1px solid #eee;
+      padding: 16px 0;
+    }
+
+    .nav-item {
+      padding: 12px 24px;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover, .nav-item.active {
+      background: #f5f5f5;
+      color: #667eea;
+    }
+
+    /* 内容区 */
+    .content {
+      flex: 1;
+      padding: 24px;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .page-header h2 {
+      font-size: 20px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-danger {
+      background: #f5576c;
+      color: white;
+    }
+
+    .btn-success {
+      background: #00d09c;
+      color: white;
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    /* 表格 */
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: #f8f8f8;
+      font-weight: 600;
+      font-size: 13px;
+      color: #666;
+    }
+
+    tr:hover {
+      background: #f8f8f8;
+    }
+
+    /* 状态标签 */
+    .status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-active { background: #e6f7ed; color: #00d09c; }
+    .status-disabled { background: #fee; color: #f5576c; }
+    .status-online { background: #e6f7ed; color: #00d09c; }
+    .status-offline { background: #fee; color: #f5576c; }
+
+    /* 统计卡片 */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .stat-card h3 {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    /* 模态框 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      font-size: 18px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    /* 审计日志 */
+    .log-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .log-item:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .log-action {
+      font-weight: 500;
+      margin: 4px 0;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      background: #333;
+      color: white;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .toast.show {
+      display: block;
+    }
+
+    .toast.success {
+      background: #00d09c;
+    }
+
+    .toast.error {
+      background: #f5576c;
+    }
+
+    /* 加载动画 */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <!-- 登录页 -->
+  <div id="loginPage" class="login-container">
+    <div class="login-box">
+      <h1>管理后台</h1>
+      <p>HQTS Secure Access</p>
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="loginUsername" placeholder="请输入用户名">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="loginPassword" placeholder="请输入密码">
+      </div>
+      <button class="login-btn" onclick="handleLogin()">登录</button>
+      <div id="loginError" class="login-error"></div>
+    </div>
+  </div>
+
+  <!-- 管理后台 -->
+  <div id="adminPage" class="admin-container">
+    <div class="header">
+      <h1>HQTS Secure Access 管理后台</h1>
+      <div class="header-right">
+        <span id="adminUsername"></span>
+        <button class="logout-btn" onclick="handleLogout()">退出</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="sidebar">
+        <div class="nav-item active" data-page="dashboard">概览</div>
+        <div class="nav-item" data-page="users">用户管理</div>
+        <div class="nav-item" data-page="nodes">节点管理</div>
+        <div class="nav-item" data-page="audit">审计日志</div>
+      </div>
+
+      <div class="content">
+        <!-- 概览 -->
+        <div id="page-dashboard" class="page">
+          <div class="page-header">
+            <h2>系统概览</h2>
+          </div>
+          <div class="stats">
+            <div class="stat-card">
+              <h3>在线用户</h3>
+              <div class="value" id="stat-online-users">-</div>
+            </div>
+            <div class="stat-card">
+              <h3>总用户数</h3>
+              <div class="value" id="stat-total-users">-</div>
+            </div>
+            <div class="stat-card">
+              <h3>在线节点</h3>
+              <div class="value" id="stat-online-nodes">-</div>
+            </div>
+            <div class="stat-card">
+              <h3>总节点数</h3>
+              <div class="value" id="stat-total-nodes">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 用户管理 -->
+        <div id="page-users" class="page" style="display:none;">
+          <div class="page-header">
+            <h2>用户管理</h2>
+          </div>
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>用户名</th>
+                  <th>姓名</th>
+                  <th>邮箱</th>
+                  <th>用户组</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 节点管理 -->
+        <div id="page-nodes" class="page" style="display:none;">
+          <div class="page-header">
+            <h2>节点管理</h2>
+            <button class="btn btn-primary" onclick="showNodeModal()">添加节点</button>
+          </div>
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>名称</th>
+                  <th>区域</th>
+                  <th>地址</th>
+                  <th>协议</th>
+                  <th>状态</th>
+                  <th>延迟</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="nodesTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 审计日志 -->
+        <div id="page-audit" class="page" style="display:none;">
+          <div class="page-header">
+            <h2>审计日志</h2>
+          </div>
+          <div class="card">
+            <div id="auditList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 节点编辑模态框 -->
+  <div id="nodeModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="nodeModalTitle">添加节点</h3>
+        <button class="modal-close" onclick="closeNodeModal()">&times;</button>
+      </div>
+      <input type="hidden" id="nodeId">
+      <div class="form-group">
+        <label>节点ID</label>
+        <input type="text" id="nodeIdInput" placeholder="如: hk-01">
+      </div>
+      <div class="form-group">
+        <label>显示名称</label>
+        <input type="text" id="nodeName" placeholder="如: 香港节点 1">
+      </div>
+      <div class="form-group">
+        <label>区域</label>
+        <input type="text" id="nodeRegion" placeholder="如: HK">
+      </div>
+      <div class="form-group">
+        <label>主机地址</label>
+        <input type="text" id="nodeHost" placeholder="如: hk-01.hqts.cn">
+      </div>
+      <div class="form-group">
+        <label>端口</label>
+        <input type="number" id="nodePort" placeholder="如: 443">
+      </div>
+      <div class="form-group">
+        <label>协议</label>
+        <select id="nodeProtocol" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+          <option value="vmess">VMess</option>
+          <option value="vless">VLESS</option>
+          <option value="trojan">Trojan</option>
+          <option value="shadowsocks">Shadowsocks</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>优先级</label>
+        <input type="number" id="nodePriority" placeholder="1 = 最高" value="1">
+      </div>
+      <div class="form-group">
+        <label>备注</label>
+        <input type="text" id="nodeDescription" placeholder="可选">
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeNodeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveNode()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // API 基础地址
+    const API_BASE = '/admin/api/v1'
+    
+    // 当前状态
+    let adminToken = localStorage.getItem('adminToken')
+    let adminUser = JSON.parse(localStorage.getItem('adminUser') || 'null')
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      if (adminToken) {
+        showAdminPage()
+      } else {
+        showLoginPage()
+      }
+      
+      // 导航点击
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const page = item.dataset.page
+          showPage(page)
+        })
+      })
+    })
+
+    // 显示登录页
+    function showLoginPage() {
+      document.getElementById('loginPage').style.display = 'flex'
+      document.getElementById('adminPage').style.display = 'none'
+    }
+
+    // 显示管理后台
+    function showAdminPage() {
+      document.getElementById('loginPage').style.display = 'none'
+      document.getElementById('adminPage').style.display = 'block'
+      document.getElementById('adminUsername').textContent = adminUser?.username || ''
+      
+      loadDashboard()
+    }
+
+    // 登录
+    async function handleLogin() {
+      const username = document.getElementById('loginUsername').value
+      const password = document.getElementById('loginPassword').value
+
+      if (!username || !password) {
+        showError('请输入用户名和密码')
+        return
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        })
+
+        const data = await res.json()
+
+        if (data.success) {
+          adminToken = data.token
+          adminUser = data.user
+          localStorage.setItem('adminToken', adminToken)
+          localStorage.setItem('adminUser', JSON.stringify(adminUser))
+          showAdminPage()
+        } else {
+          showError(data.error || '登录失败')
+        }
+      } catch (err) {
+        showError('登录异常: ' + err.message)
+      }
+    }
+
+    // 登出
+    async function handleLogout() {
+      try {
+        await fetch(`${API_BASE}/logout`, {
+          method: 'POST',
+          headers: { getAuthHeader() }
+        })
+      } catch {}
+
+      adminToken = null
+      adminUser = null
+      localStorage.removeItem('adminToken')
+      localStorage.removeItem('adminUser')
+      showLoginPage()
+    }
+
+    // 获取认证头
+    function getAuthHeader() {
+      return { 'Authorization': `Bearer ${adminToken}` }
+    }
+
+    // 显示错误
+    function showError(msg) {
+      const el = document.getElementById('loginError')
+      el.textContent = msg
+      el.style.display = 'block'
+    }
+
+    // Toast
+    function showToast(msg, type = 'info') {
+      const el = document.getElementById('toast')
+      el.textContent = msg
+      el.className = `toast show ${type}`
+      setTimeout(() => el.classList.remove('show'), 3000)
+    }
+
+    // 切换页面
+    function showPage(page) {
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.page === page)
+      })
+      document.querySelectorAll('.page').forEach(p => {
+        p.style.display = p.id === `page-${page}` ? 'block' : 'none'
+      })
+
+      if (page === 'users') loadUsers()
+      if (page === 'nodes') loadNodes()
+      if (page === 'audit') loadAudit()
+      if (page === 'dashboard') loadDashboard()
+    }
+
+    // 加载概览
+    async function loadDashboard() {
+      try {
+        const res = await fetch(`${API_BASE}/stats`, { headers: getAuthHeader() })
+        const data = await res.json()
+        
+        document.getElementById('stat-online-users').textContent = data.onlineUsers || 0
+        document.getElementById('stat-total-users').textContent = data.totalUsers || 0
+        document.getElementById('stat-online-nodes').textContent = data.onlineNodes || 0
+        document.getElementById('stat-total-nodes').textContent = data.totalNodes || 0
+      } catch (err) {
+        console.error('Failed to load stats:', err)
+      }
+    }
+
+    // 加载用户列表
+    async function loadUsers() {
+      try {
+        const res = await fetch(`${API_BASE}/users`, { headers: getAuthHeader() })
+        const data = await res.json()
+        
+        const tbody = document.getElementById('usersTable')
+        tbody.innerHTML = data.users?.map(user => `
+          <tr>
+            <td>${user.id}</td>
+            <td>${user.username}</td>
+            <td>${user.name}</td>
+            <td>${user.email}</td>
+            <td>${user.group}</td>
+            <td>
+              <span class="status ${user.status === 'active' ? 'status-active' : 'status-disabled'}">
+                ${user.status === 'active' ? '正常' : '禁用'}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-sm ${user.status === 'active' ? 'btn-danger' : 'btn-success'}" 
+                      onclick="toggleUser('${user.id}', '${user.status}')">
+                ${user.status === 'active' ? '禁用' : '启用'}
+              </button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="7">暂无数据</td></tr>'
+      } catch (err) {
+        console.error('Failed to load users:', err)
+      }
+    }
+
+    // 切换用户状态
+    async function toggleUser(userId, currentStatus) {
+      const newStatus = currentStatus === 'active' ? 'disabled' : 'active'
+      try {
+        const res = await fetch(`${API_BASE}/users/${userId}`, {
+          method: 'PUT',
+          headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        })
+        const data = await res.json()
+        if (data.success) {
+          showToast('操作成功', 'success')
+          loadUsers()
+        }
+      } catch (err) {
+        showToast('操作失败', 'error')
+      }
+    }
+
+    // 加载节点列表
+    async function loadNodes() {
+      try {
+        const res = await fetch(`${API_BASE}/nodes`, { headers: getAuthHeader() })
+        const data = await res.json()
+        
+        const tbody = document.getElementById('nodesTable')
+        tbody.innerHTML = data.nodes?.map(node => `
+          <tr>
+            <td>${node.id}</td>
+            <td>${node.name}</td>
+            <td>${node.region}</td>
+            <td>${node.host}:${node.port}</td>
+            <td>${node.protocol.toUpperCase()}</td>
+            <td>
+              <span class="status ${node.status === 'online' ? 'status-online' : 'status-offline'}">
+                ${node.status === 'online' ? '在线' : '离线'}
+              </span>
+            </td>
+            <td>${node.latency > 0 ? node.latency + 'ms' : '-'}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="editNode('${node.id}')">编辑</button>
+              <button class="btn btn-sm btn-success" onclick="testNode('${node.id}')">测试</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteNode('${node.id}')">删除</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="8">暂无数据</td></tr>'
+      } catch (err) {
+        console.error('Failed to load nodes:', err)
+      }
+    }
+
+    // 显示节点模态框
+    function showNodeModal(node = null) {
+      document.getElementById('nodeModal').classList.add('show')
+      document.getElementById('nodeModalTitle').textContent = node ? '编辑节点' : '添加节点'
+      
+      document.getElementById('nodeId').value = node?.id || ''
+      document.getElementById('nodeIdInput').value = node?.id || ''
+      document.getElementById('nodeName').value = node?.name || ''
+      document.getElementById('nodeRegion').value = node?.region || ''
+      document.getElementById('nodeHost').value = node?.host || ''
+      document.getElementById('nodePort').value = node?.port || 443
+      document.getElementById('nodeProtocol').value = node?.protocol || 'vmess'
+      document.getElementById('nodePriority').value = node?.priority || 1
+      document.getElementById('nodeDescription').value = node?.description || ''
+
+      document.getElementById('nodeIdInput').disabled = !!node
+    }
+
+    // 关闭节点模态框
+    function closeNodeModal() {
+      document.getElementById('nodeModal').classList.remove('show')
+    }
+
+    // 编辑节点
+    async function editNode(nodeId) {
+      try {
+        const res = await fetch(`${API_BASE}/nodes/${nodeId}`, { headers: getAuthHeader() })
+        const data = await res.json()
+        showNodeModal(data)
+      } catch (err) {
+        showToast('加载失败', 'error')
+      }
+    }
+
+    // 保存节点
+    async function saveNode() {
+      const id = document.getElementById('nodeId').value
+      const isEdit = !!id
+
+      const nodeData = {
+        id: document.getElementById('nodeIdInput').value,
+        name: document.getElementById('nodeName').value,
+        region: document.getElementById('nodeRegion').value,
+        host: document.getElementById('nodeHost').value,
+        port: parseInt(document.getElementById('nodePort').value),
+        protocol: document.getElementById('nodeProtocol').value,
+        priority: parseInt(document.getElementById('nodePriority').value),
+        description: document.getElementById('nodeDescription').value
+      }
+
+      try {
+        const url = isEdit ? `${API_BASE}/nodes/${id}` : `${API_BASE}/nodes`
+        const method = isEdit ? 'PUT' : 'POST'
+        
+        const res = await fetch(url, {
+          method,
+          headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(nodeData)
+        })
+        
+        const data = await res.json()
+        if (data.success !== false) {
+          showToast('保存成功', 'success')
+          closeNodeModal()
+          loadNodes()
+        } else {
+          showToast(data.error || '保存失败', 'error')
+        }
+      } catch (err) {
+        showToast('保存失败', 'error')
+      }
+    }
+
+    // 删除节点
+    async function deleteNode(nodeId) {
+      if (!confirm('确定要删除这个节点吗？')) return
+      
+      try {
+        await fetch(`${API_BASE}/nodes/${nodeId}`, {
+          method: 'DELETE',
+          headers: getAuthHeader()
+        })
+        showToast('删除成功', 'success')
+        loadNodes()
+      } catch (err) {
+        showToast('删除失败', 'error')
+      }
+    }
+
+    // 测试节点
+    async function testNode(nodeId) {
+      try {
+        await fetch(`${API_BASE}/nodes/${nodeId}/test`, {
+          method: 'POST',
+          headers: getAuthHeader()
+        })
+        showToast('测试开始...', 'success')
+        setTimeout(loadNodes, 3000)
+      } catch (err) {
+        showToast('测试失败', 'error')
+      }
+    }
+
+    // 加载审计日志
+    async function loadAudit() {
+      try {
+        const res = await fetch(`${API_BASE}/audit`, { headers: getAuthHeader() })
+        const data = await res.json()
+        
+        const list = document.getElementById('auditList')
+        list.innerHTML = data.logs?.map(log => `
+          <div class="log-item">
+            <div class="log-time">${new Date(log.created_at * 1000).toLocaleString()}</div>
+            <div class="log-action">${log.action}</div>
+            <div>用户: ${log.user_id} | IP: ${log.ip}</div>
+          </div>
+        `).join('') || '<div class="loading">暂无日志</div>'
+      } catch (err) {
+        console.error('Failed to load audit:', err)
+      }
+    }
+  </script>
+</body>
+</html>
