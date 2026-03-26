@@ -56,17 +56,8 @@ type tokenInfo struct {
 	expiresAt    time.Time
 }
 
-// 初始化 - 注册模拟用户
-func init() {
-	storeUser("u001", "zhangsan", "张三", "zhangsan@hqts.cn", "CN_EMPLOYEE")
-	storeUser("u002", "lisi", "李四", "lisi@hqts.cn", "HK_EMPLOYEE")
-}
-
-// 存储用户信息
-var mockUsers = map[string]*models.User{
-	"u001": {ID: "u001", Name: "张三", Email: "zhangsan@hqts.cn", Group: "CN_EMPLOYEE"},
-	"u002": {ID: "u002", Name: "李四", Email: "lisi@hqts.cn", Group: "HK_EMPLOYEE"},
-}
+// 用户存储（JIT模式 - 用户首次登录时自动创建）
+var mockUsers = map[string]*models.User{}
 
 func storeUser(id, nameCN, name, email, group string) {
 	mockUsers[name] = &models.User{ID: id, Name: nameCN, Email: email, Group: group}
@@ -170,11 +161,12 @@ func HandleCasExchange(c *gin.Context) {
 	// 实际环境中，应该调用 CAS 服务器验证 ticket
 	// 这里简化处理，假设 ticket 有效
 	
-	// 查找或创建用户
+	// JIT模式：自动创建或获取用户
+	// 用户首次登录时自动添加到用户列表
 	user, exists := mockUsers[req.Username]
 	if !exists {
 		// 为新用户创建记录
-		newID := fmt.Sprintf("u%s", req.Username)
+		newID := fmt.Sprintf("u%03d", len(mockUsers)+1)
 		user = &models.User{
 			ID:       newID,
 			Name:     req.Name,
@@ -182,6 +174,9 @@ func HandleCasExchange(c *gin.Context) {
 			Group:    req.Department,
 		}
 		mockUsers[req.Username] = user
+		log.Printf("JIT: Created new user %s (%s)", req.Username, req.Email)
+	} else {
+		log.Printf("JIT: Existing user %s logged in", req.Username)
 	}
 
 	// 生成内部 token

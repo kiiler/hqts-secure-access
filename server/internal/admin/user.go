@@ -5,8 +5,11 @@ package admin
  */
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,44 +47,39 @@ var (
 	}
 )
 
-// InitUsers 初始化一些测试用户
-func init() {
-	users := []*User{
-		{
-			ID:        "u001",
-			Username:  "zhangsan",
-			Name:      "张三",
-			Email:     "zhangsan@hqts.cn",
-			Group:     "CN_EMPLOYEE",
-			Status:    UserStatusActive,
-			CreatedAt: 1700000000,
-			LoginCount: 10,
-		},
-		{
-			ID:        "u002",
-			Username:  "lisi",
-			Name:      "李四",
-			Email:     "lisi@hqts.cn",
-			Group:     "HK_EMPLOYEE",
-			Status:    UserStatusActive,
-			CreatedAt: 1700100000,
-			LoginCount: 5,
-		},
-		{
-			ID:        "u003",
-			Username:  "wangwu",
-			Name:      "王五",
-			Email:     "wangwu@hqts.cn",
-			Group:     "CN_EMPLOYEE",
-			Status:    UserStatusDisabled,
-			CreatedAt: 1700200000,
-			LoginCount: 0,
-		},
+// CreateOrGetUser 创建或获取用户（JIT模式）
+// 用户首次登录时自动创建
+func CreateOrGetUser(username, name, email, department string) *User {
+	userStore.Lock()
+	defer userStore.Unlock()
+
+	// 查找是否已存在
+	for _, u := range userStore.m {
+		if u.Username == username || u.Email == email {
+			// 更新登录信息
+			u.LoginCount++
+			u.LastLoginAt = time.Now().Unix()
+			return u
+		}
 	}
 
-	for _, u := range users {
-		userStore.m[u.ID] = u
+	// 创建新用户
+	id := fmt.Sprintf("u%03d", len(userStore.m)+1)
+	newUser := &User{
+		ID:         id,
+		Username:   username,
+		Name:       name,
+		Email:      email,
+		Group:      department,
+		Status:     UserStatusActive, // 新用户默认可用
+		CreatedAt:  time.Now().Unix(),
+		LastLoginAt: time.Now().Unix(),
+		LoginCount: 1,
 	}
+
+	userStore.m[newUser.ID] = newUser
+	log.Printf("JIT: Created new user %s (%s)", username, email)
+	return newUser
 }
 
 // HandleListUsers 获取用户列表
