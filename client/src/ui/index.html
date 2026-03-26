@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://oauth2.hqts.cn https://config.hqts.cn">
+  <title>HQTS Secure Access</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 头部 */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .user-info {
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* 状态卡片 */
+    .status-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .status-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 15px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      transition: all 0.3s ease;
+    }
+
+    .status-icon.connected {
+      background: linear-gradient(135deg, #00d09c 0%, #00b894 100%);
+      box-shadow: 0 8px 32px rgba(0,208,156,0.4);
+    }
+
+    .status-icon.disconnected {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .status-text {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .status-mode {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    /* 连接按钮 */
+    .connect-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+    }
+
+    .connect-btn.connect {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+
+    .connect-btn.disconnect {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #fff;
+    }
+
+    .connect-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+
+    .connect-btn:active {
+      transform: translateY(0);
+    }
+
+    .connect-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* 模式选择 */
+    .mode-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .mode-title {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 10px;
+    }
+
+    .mode-options {
+      display: flex;
+      gap: 10px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .mode-btn.active {
+      border-color: #667eea;
+      background: rgba(102,126,234,0.2);
+      color: #fff;
+    }
+
+    .mode-btn:hover:not(.active) {
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    /* 操作按钮 */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .action-btn:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* 诊断结果 */
+    .diagnose-result {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 11px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .diagnose-result.show {
+      display: block;
+    }
+
+    .diagnose-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .diagnose-item.pass { color: #00d09c; }
+    .diagnose-item.fail { color: #f5576c; }
+    .diagnose-item.error { color: #f093fb; }
+
+    /* 登录界面 */
+    .login-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .login-icon {
+      width: 100px;
+      height: 100px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      margin-bottom: 30px;
+      box-shadow: 0 16px 48px rgba(102,126,234,0.4);
+    }
+
+    .login-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .login-desc {
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 30px;
+    }
+
+    .login-btn {
+      padding: 14px 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(102,126,234,0.4);
+    }
+
+    /* 隐藏类 */
+    .hidden {
+      display: none !important;
+    }
+
+    /* 加载动画 */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <!-- 登录界面 -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-icon">🔐</div>
+    <div class="login-title">HQTS Secure Access</div>
+    <div class="login-desc">安全接入内网的统一入口</div>
+    <button class="login-btn" onclick="handleLogin()">使用企业账号登录</button>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="mainScreen" class="container hidden">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">🔐</div>
+        <span class="logo-text">HQTS</span>
+      </div>
+      <div class="user-info">
+        <span id="userName">-</span>
+        <button onclick="handleLogout()" style="background:none;border:none;color:#f5576c;cursor:pointer;font-size:12px;margin-left:8px;">退出</button>
+      </div>
+    </div>
+
+    <div class="status-card">
+      <div id="statusIcon" class="status-icon disconnected">⬤</div>
+      <div id="statusText" class="status-text">未连接</div>
+      <div id="statusMode" class="status-mode">模式: BYPASS_CN</div>
+    </div>
+
+    <button id="connectBtn" class="connect-btn connect" onclick="handleConnect()">
+      连接
+    </button>
+
+    <div class="mode-section">
+      <div class="mode-title">分流模式</div>
+      <div class="mode-options">
+        <button class="mode-btn" data-mode="GLOBAL" onclick="handleModeSwitch('GLOBAL')">GLOBAL</button>
+        <button class="mode-btn active" data-mode="BYPASS_CN" onclick="handleModeSwitch('BYPASS_CN')">绕过大陆</button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn" onclick="handleExportLogs()">📋 导出日志</button>
+      <button class="action-btn" onclick="handleDiagnose()">🔍 网络诊断</button>
+    </div>
+
+    <div id="diagnoseResult" class="diagnose-result"></div>
+  </div>
+
+  <script>
+    // 状态
+    let isConnected = false
+    let currentMode = 'BYPASS_CN'
+    let isLoggingIn = false
+
+    // 初始化
+    async function init() {
+      try {
+        const loggedIn = await window.hqtsAPI.auth.status()
+        if (loggedIn) {
+          const userInfo = await window.hqtsAPI.auth.getUserInfo()
+          showMainScreen(userInfo)
+          
+          // 检查VPN状态
+          const vpnStatus = await window.hqtsAPI.vpn.status()
+          updateVPNStatus(vpnStatus.connected, vpnStatus.mode)
+        } else {
+          showLoginScreen()
+        }
+
+        // 监听状态变化
+        window.hqtsAPI.vpn.onStatusChanged((status) => {
+          updateVPNStatus(status.connected, status.mode)
+        })
+      } catch (error) {
+        console.error('Init error:', error)
+        showLoginScreen()
+      }
+    }
+
+    // 显示登录界面
+    function showLoginScreen() {
+      document.getElementById('loginScreen').classList.remove('hidden')
+      document.getElementById('mainScreen').classList.add('hidden')
+    }
+
+    // 显示主界面
+    function showMainScreen(userInfo) {
+      document.getElementById('loginScreen').classList.add('hidden')
+      document.getElementById('mainScreen').classList.remove('hidden')
+      if (userInfo) {
+        document.getElementById('userName').textContent = userInfo.name || userInfo.email || '用户'
+      }
+    }
+
+    // 登录
+    async function handleLogin() {
+      if (isLoggingIn) return
+      isLoggingIn = true
+
+      try {
+        // 启动OAuth2流程 - 这里简化处理，实际应该打开浏览器获取code
+        // 由于是企业应用，简化处理：使用模拟code进行登录
+        const mockCode = 'mock_auth_code_' + Date.now()
+        
+        const result = await window.hqtsAPI.auth.login(mockCode)
+        if (result.success) {
+          showMainScreen(result.userInfo)
+        } else {
+          alert('登录失败: ' + (result.error || '未知错误'))
+        }
+      } catch (error) {
+        alert('登录异常: ' + error.message)
+      } finally {
+        isLoggingIn = false
+      }
+    }
+
+    // 登出
+    async function handleLogout() {
+      if (!confirm('确定要退出登录吗？')) return
+      
+      try {
+        await window.hqtsAPI.auth.logout()
+        showLoginScreen()
+      } catch (error) {
+        console.error('Logout error:', error)
+      }
+    }
+
+    // 更新VPN状态显示
+    function updateVPNStatus(connected, mode) {
+      isConnected = connected
+      currentMode = mode
+
+      const statusIcon = document.getElementById('statusIcon')
+      const statusText = document.getElementById('statusText')
+      const statusMode = document.getElementById('statusMode')
+      const connectBtn = document.getElementById('connectBtn')
+
+      if (connected) {
+        statusIcon.classList.remove('disconnected')
+        statusIcon.classList.add('connected')
+        statusIcon.textContent = '🔒'
+        statusText.textContent = '已连接'
+        connectBtn.textContent = '断开'
+        connectBtn.classList.remove('connect')
+        connectBtn.classList.add('disconnect')
+      } else {
+        statusIcon.classList.remove('connected')
+        statusIcon.classList.add('disconnected')
+        statusIcon.textContent = '⬤'
+        statusText.textContent = '未连接'
+        connectBtn.textContent = '连接'
+        connectBtn.classList.remove('disconnect')
+        connectBtn.classList.add('connect')
+      }
+
+      statusMode.textContent = '模式: ' + (mode === 'BYPASS_CN' ? '绕过大陆' : '全局模式')
+
+      // 更新模式按钮状态
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        if (btn.dataset.mode === mode) {
+          btn.classList.add('active')
+        } else {
+          btn.classList.remove('active')
+        }
+      })
+    }
+
+    // 连接/断开
+    async function handleConnect() {
+      const btn = document.getElementById('connectBtn')
+      btn.disabled = true
+      btn.innerHTML = '<span class="loading"></span>处理中...'
+
+      try {
+        let result
+        if (isConnected) {
+          result = await window.hqtsAPI.vpn.disconnect()
+        } else {
+          result = await window.hqtsAPI.vpn.connect()
+        }
+
+        if (!result.success) {
+          alert('操作失败: ' + (result.error || '未知错误'))
+        }
+      } catch (error) {
+        alert('操作异常: ' + error.message)
+      } finally {
+        btn.disabled = false
+        const vpnStatus = await window.hqtsAPI.vpn.status()
+        updateVPNStatus(vpnStatus.connected, vpnStatus.mode)
+      }
+    }
+
+    // 切换模式
+    async function handleModeSwitch(mode) {
+      if (mode === currentMode) return
+
+      try {
+        const result = await window.hqtsAPI.vpn.switchMode(mode)
+        if (result.success) {
+          currentMode = mode
+          updateVPNStatus(isConnected, mode)
+        } else {
+          alert('切换模式失败: ' + (result.error || '未知错误'))
+        }
+      } catch (error) {
+        alert('切换模式异常: ' + error.message)
+      }
+    }
+
+    // 导出日志
+    async function handleExportLogs() {
+      try {
+        const result = await window.hqtsAPI.logs.export()
+        alert('日志文件: ' + result.path)
+        // 实际应该打开文件所在目录
+      } catch (error) {
+        alert('导出日志失败: ' + error.message)
+      }
+    }
+
+    // 网络诊断
+    async function handleDiagnose() {
+      const diagnoseResult = document.getElementById('diagnoseResult')
+      diagnoseResult.classList.add('show')
+      diagnoseResult.innerHTML = '<span class="loading"></span>诊断中...'
+
+      try {
+        const result = await window.hqtsAPI.diagnose.run()
+        
+        let html = ''
+        for (const [key, value] of Object.entries(result)) {
+          if (key === 'timestamp') continue
+          
+          let statusClass = 'pass'
+          if (value === 'fail' || value === 'error') statusClass = 'fail'
+          if (value === 'pending') statusClass = 'error'
+          
+          const labels = {
+            singboxInstalled: 'sing-box安装',
+            configValid: '配置有效',
+            authValid: '认证有效',
+            dnsLeakTest: 'DNS泄露测试',
+            connectionTest: '连接状态'
+          }
+          
+          html += `<div class="diagnose-item ${statusClass}">
+            <span>${labels[key] || key}</span>
+            <span>${value === 'pass' ? '✓' : value === 'fail' ? '✗' : value === 'error' ? '!' : value}</span>
+          </div>`
+        }
+        
+        diagnoseResult.innerHTML = html
+      } catch (error) {
+        diagnoseResult.innerHTML = '<div class="diagnose-item fail">诊断异常: ' + error.message + '</div>'
+      }
+    }
+
+    // 启动
+    init()
+  </script>
+</body>
+</html>
