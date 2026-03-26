@@ -3,6 +3,9 @@ import { join } from 'path'
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
 import log from 'electron-log'
 
+// 获取客户端版本
+const CLIENT_VERSION = app.getVersion() || '1.0.0'
+
 /**
  * AuthManager - 负责CAS认证登录态管理
  * 
@@ -211,15 +214,27 @@ class AuthManager {
           email: casUser.email,
           department: casUser.department,
           groups: casUser.groups,
-          casTicket: this.casTicket
+          casTicket: this.casTicket,
+          clientVersion: CLIENT_VERSION
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`Token exchange failed: ${response.status}`)
+      const data = await response.json()
+
+      // 检查是否需要强制更新
+      if (data.updateRequired || data.error === 'UPDATE_REQUIRED') {
+        log.warn('Update required, current version:', CLIENT_VERSION)
+        return {
+          success: false,
+          error: 'UPDATE_REQUIRED',
+          message: data.message || '版本过低，请更新客户端',
+          updateRequired: true
+        }
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || `Token exchange failed: ${response.status}`)
+      }
 
       this.accessToken = data.accessToken
       this.refreshToken = data.refreshToken

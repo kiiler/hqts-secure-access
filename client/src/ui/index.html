@@ -409,7 +409,7 @@
       try {
         // 调用 CAS 登录，会打开登录窗口
         const result = await window.hqtsAPI.auth.login()
-        
+
         if (result.success) {
           // 登录窗口关闭后，验证结果
           const status = await window.hqtsAPI.auth.status()
@@ -417,6 +417,11 @@
             const userInfo = await window.hqtsAPI.auth.getUserInfo()
             showMainScreen(userInfo)
           }
+        } else if (result.error === 'UPDATE_REQUIRED') {
+          // 强制更新
+          alert('版本过低，必须更新客户端才能使用。\n\n请点击确定前往下载新版本。')
+          // 打开下载页面
+          window.hqtsAPI.app.downloadUpdate()
         } else if (result.error && result.error !== 'Login cancelled') {
           alert('登录失败: ' + (result.error || '未知错误'))
         }

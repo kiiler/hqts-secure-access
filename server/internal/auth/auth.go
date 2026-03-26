@@ -149,6 +149,7 @@ func HandleCasExchange(c *gin.Context) {
 		Email    string `json:"email"`
 		Department string `json:"department"`
 		CasTicket string `json:"casTicket"`
+		ClientVersion string `json:"clientVersion"` // 客户端版本
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -156,11 +157,21 @@ func HandleCasExchange(c *gin.Context) {
 		return
 	}
 
-	log.Printf("CAS exchange for user: %s", req.Username)
+	log.Printf("CAS exchange for user: %s, client version: %s", req.Username, req.ClientVersion)
+
+	// 检查客户端版本
+	if ok, errMsg := config.CheckVersion(req.ClientVersion); !ok {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":          "UPDATE_REQUIRED",
+			"message":        errMsg,
+			"updateRequired": true,
+		})
+		return
+	}
 
 	// 实际环境中，应该调用 CAS 服务器验证 ticket
 	// 这里简化处理，假设 ticket 有效
-	
+
 	// JIT模式：自动创建或获取用户
 	// 用户首次登录时自动添加到用户列表
 	user, exists := mockUsers[req.Username]
