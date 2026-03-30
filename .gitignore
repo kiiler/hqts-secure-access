@@ -1,0 +1,37 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+
+# Electron build
+client/release/
+client/out/
+client/dist/
+client/bin/sing-box
+client/bin/sing-box.exe
+
+# Node modules
+client/node_modules/
+node_modules/
+
+# Logs & tmp
+*.log
+*.tmp
+*.tmp.*
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Go
+server/main
+server/hqts-secure-access-server
+
+# IDE
+.vscode/
+.idea/
