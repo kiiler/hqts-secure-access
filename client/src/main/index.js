@@ -13,38 +13,13 @@ import { API_CONFIG, getApiUrl } from '../config.js'
 log.transports.file.level = 'info'
 log.transports.console.level = 'debug'
 
-// 向服务端上报日志的函数
-async function reportLogToServer(level, source, message, stack = '') {
-  const entry = {
-    level,
-    source,
-    message,
-    stack,
-    timestamp: new Date().toISOString(),
-    clientVersion: app.getVersion()
-  }
-  try {
-    await fetch(getApiUrl('/api/v1/client-logs'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry)
-    })
-  } catch (e) {
-    log.warn('Failed to report log to server:', e.message)
-  }
-}
-
-// 全局异常处理（主进程错误也要上报）
+// 主进程本地日志记录（不上报到服务器，由用户手动报告）
 process.on('uncaughtException', (error) => {
   log.error('Uncaught Exception:', error)
-  reportLogToServer('error', 'main', error.message, error.stack)
 })
 
 process.on('unhandledRejection', (reason) => {
   log.error('Unhandled Rejection:', reason)
-  const msg = reason instanceof Error ? reason.message : String(reason)
-  const stack = reason instanceof Error ? reason.stack : ''
-  reportLogToServer('error', 'main', msg, stack)
 })
 
 class HQTSClient {
