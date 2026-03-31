@@ -11,6 +11,7 @@ package admin
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -33,7 +34,8 @@ var (
 		"zhangsan@hqts.cn":    true,
 		"tech-leader@hqts.cn": true,
 	}
-
+)
+var (
 	// JWT配置
 	jwtSecret     = []byte("change-admin-jwt-secret-in-production")
 	adminJwtExpiry = time.Hour * 8 // 8小时
@@ -46,6 +48,12 @@ var (
 		m: make(map[string]*adminTokenInfo),
 	}
 )
+
+// SetupAdmin 设置管理员密码
+func SetupAdmin(password string) {
+	adminPassword = password
+	log.Println("Admin password updated from config")
+}
 
 type AdminUser struct {
 	Username string `json:"username"`

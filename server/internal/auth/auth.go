@@ -27,15 +27,23 @@ import (
  */
 
 var (
-	// CAS 配置 - 需要替换为实际的泛微OA地址
+	// CAS 配置 - 可通过 SetupCAS() 修改
 	casConfig = struct {
-		CasServerURL string // https://hubportaltest.hqts.cn
-		ServiceURL   string // hqts://auth/callback
+		CasServerURL string
+		ServiceURL   string
 	}{
 		CasServerURL: "https://hubportaltest.hqts.cn",
 		ServiceURL:   "hqts://auth/callback",
 	}
+)
 
+// SetupCAS 设置 CAS 配置
+func SetupCAS(serverURL, serviceURL string) {
+	casConfig.CasServerURL = serverURL
+	casConfig.ServiceURL = serviceURL
+	log.Printf("CAS configured: %s", serverURL)
+}
+var (
 	// JWT配置
 	jwtSecret = []byte("change-jwt-secret-in-production")
 	jwtExpiry = time.Hour * 1 // 1小时
@@ -49,6 +57,7 @@ var (
 		m: make(map[string]*tokenInfo),
 	}
 )
+
 
 type tokenInfo struct {
 	userID       string

@@ -1,0 +1,18 @@
+{
+  "server": {
+    "listen": ":8080"
+  },
+  "cas": {
+    "serverUrl": "https://hubportaltest.hqts.cn",
+    "serviceUrl": "hqts://auth/callback"
+  },
+  "singbox": {
+    "version": "1.9.4",
+    "downloadBase": "/api/v1/singbox",
+    "localPath": "./singbox-bin"
+  },
+  "admin": {
+    "username": "sysadmin",
+    "password": "hqts-admin-2024"
+  }
+}

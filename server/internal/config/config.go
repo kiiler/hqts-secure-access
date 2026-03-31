@@ -1,8 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"hqts-secure-access-server/internal/auth"
@@ -26,16 +29,149 @@ import (
 var (
 	configVersion = "v1.0.0"
 	configMu      sync.RWMutex
+	listenAddr   = "localhost:8080" // 服务端监听地址，用于生成singbox下载地址
 )
 
-const (
-	singboxVersion     = "1.9.4"
-	singboxDownloadURL = "https://github.com/SagerNet/sing-box/releases/download/v1.9.4/sing-box-1.9.4-windows-amd64.zip"
-)
+// SetListenAddr 设置服务端监听地址
+func SetListenAddr(addr string) {
+	listenAddr = addr
+}
 
-// 获取 sing-box 下载地址
-func getSingboxDownloadURL() string {
-	return singboxDownloadURL
+// GetListenAddr 获取服务端监听地址
+func GetListenAddr() string {
+	return listenAddr
+}
+
+// GetServerConfig 获取当前服务器配置
+func GetServerConfig() *ServerConfig {
+	return serverConfig
+}
+type ServerConfig struct {
+	Server  ServerInfo `json:"server"`
+	CAS     CASInfo   `json:"cas"`
+	Singbox SingboxInfo `json:"singbox"`
+	Admin   AdminInfo `json:"admin"`
+}
+
+type ServerInfo struct {
+	Listen string `json:"listen"`
+}
+
+type CASInfo struct {
+	ServerUrl  string `json:"serverUrl"`
+	ServiceUrl string `json:"serviceUrl"`
+}
+
+type SingboxInfo struct {
+	Version       string `json:"version"`
+	DownloadBase  string `json:"downloadBase"`
+	LocalPath    string `json:"localPath"`
+}
+
+type AdminInfo struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+var serverConfig *ServerConfig
+
+// LoadConfig 加载外部配置文件
+func LoadConfig(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("Warning: failed to load config file %s: %v, using defaults", path, err)
+		return err
+	}
+	
+	var cfg ServerConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("Warning: failed to parse config file: %v, using defaults", err)
+		return err
+	}
+	
+	serverConfig = &cfg
+	log.Printf("Config loaded: singbox version=%s, cas=%s", cfg.Singbox.Version, cfg.CAS.ServerUrl)
+	return nil
+}
+
+// GetSingboxVersion 获取 sing-box 版本
+func GetSingboxVersion() string {
+	if serverConfig != nil {
+		return serverConfig.Singbox.Version
+	}
+	return "1.9.4"
+}
+
+// GetSingboxDownloadURL 获取 sing-box 下载地址（指向服务端自身）
+func GetSingboxDownloadURL(listenAddr string) string {
+	if serverConfig != nil {
+		return "http://" + listenAddr + serverConfig.Singbox.DownloadBase + "/" + serverConfig.Singbox.Version
+	}
+	return "http://localhost:8080/api/v1/singbox/1.9.4"
+}
+
+// GetCasServerURL 获取 CAS 服务器地址
+func GetCasServerURL() string {
+	if serverConfig != nil {
+		return serverConfig.CAS.ServerUrl
+	}
+	return "https://hubportaltest.hqts.cn"
+}
+
+// GetCasServiceURL 获取 CAS Service URL
+func GetCasServiceURL() string {
+	if serverConfig != nil {
+		return serverConfig.CAS.ServiceUrl
+	}
+	return "hqts://auth/callback"
+}
+
+// GetSingboxLocalPath 获取 sing-box 本地存储路径
+func GetSingboxLocalPath() string {
+	if serverConfig != nil {
+		return serverConfig.Singbox.LocalPath
+	}
+	return "./singbox-bin"
+}
+
+/**
+ * HandleDownloadSingbox 下载 sing-box 二进制
+ * GET /api/v1/singbox/:version
+ */
+func HandleDownloadSingbox(c *gin.Context) {
+	version := c.Param("version")
+	
+	// 确保目录存在
+	localPath := GetSingboxLocalPath()
+	
+	// 尝试多个可能的文件名
+	possibleNames := []string{
+		"sing-box-" + version + "-windows-amd64.zip",
+		"sing-box-" + version + "-windows-amd64-signed.zip",
+		"sing-box.exe",
+		"sing-box-" + version + ".zip",
+	}
+	
+	var filePath string
+	for _, name := range possibleNames {
+		testPath := filepath.Join(localPath, name)
+		if _, err := os.Stat(testPath); err == nil {
+			filePath = testPath
+			break
+		}
+	}
+	
+	// 如果本地文件不存在，尝试下载
+	if filePath == "" {
+		c.JSON(404, gin.H{
+			"error":   "sing-box binary not found",
+			"version": version,
+			"hint":    "请先通过管理后台上传 sing-box 二进制文件到 " + localPath + " 目录",
+		})
+		return
+	}
+	
+	c.File(filePath)
 }
 
 /**
@@ -78,8 +214,8 @@ func HandleGetConfig(c *gin.Context) {
 			{Server: "8.8.8.8", Port: 53, Protocol: "doh"},
 		},
 		Singbox: models.SingboxConfig{
-			Version:     "1.9.4",
-			DownloadURL: getSingboxDownloadURL(),
+			Version:     GetSingboxVersion(),
+			DownloadURL: GetSingboxDownloadURL(GetListenAddr()),
 		},
 	}
 

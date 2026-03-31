@@ -17,12 +17,40 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 获取服务端监听地址
+func getListenAddr() string {
+	addr := os.Getenv("HQTS_LISTEN")
+	if addr != "" {
+		return addr
+	}
+	return config.GetListenAddr()
+}
+
+// 获取服务器配置
+func getServerConfig() *config.ServerConfig {
+	return config.GetServerConfig()
+}
+
 func main() {
 	log.Println("HQTS Secure Access Server starting...")
 
 	// 初始化数据库
 	if err := audit.InitDB(); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
+	}
+
+	// 加载外部配置
+	config.LoadConfig("server-config.json")
+
+	// 设置服务端监听地址
+	config.SetListenAddr(getListenAddr())
+
+	// 设置 CAS 认证信息
+	auth.SetupCAS(config.GetCasServerURL(), config.GetCasServiceURL())
+
+	// 设置管理员密码
+	if cfg := getServerConfig(); cfg != nil && cfg.Admin.Password != "" {
+		admin.SetupAdmin(cfg.Admin.Password)
 	}
 
 	// 初始化 Gin
@@ -71,6 +99,9 @@ func main() {
 
 		// 版本信息（公开接口，客户端轮询）
 		api.GET("/version", config.HandleGetVersion) // 获取最新版本（不需要认证）
+
+		// sing-box 二进制下载（公开接口）
+		api.GET("/singbox/:version", config.HandleDownloadSingbox) // 下载 sing-box 二进制
 
 		// 节点目录
 		nodeGroup := api.Group("/nodes")
@@ -160,7 +191,8 @@ func main() {
 
 	// 启动服务器
 	go func() {
-		if err := r.Run(":8080"); err != nil {
+		listenAddr := config.GetListenAddr()
+		if err := r.Run(listenAddr); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
