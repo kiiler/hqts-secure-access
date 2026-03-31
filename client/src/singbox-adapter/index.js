@@ -15,18 +15,13 @@ import log from 'electron-log'
  * - 版本管理
  */
 
-/**
- * sing-box 版本配置
- * 注意：必须与服务端节点配置使用的 sing-box 版本兼容
- */
-const SINGBOX_VERSION = '1.9.4'
-const SINGBOX_DOWNLOAD_BASE = 'https://github.com/SagerNet/sing-box/releases/download'
-
 class SingboxAdapter {
   constructor() {
     this.process = null
     this.configPath = null
     this.isRunning = false
+    this.singboxVersion = null
+    this.singboxDownloadUrl = null
 
     // sing-box二进制路径
     this.binDir = join(app.getPath('userData'), 'bin')
@@ -38,10 +33,21 @@ class SingboxAdapter {
   }
 
   /**
+   * 设置 sing-box 版本和下载地址（从服务端配置传入）
+   * @param {string} version - 版本号，如 "1.9.4"
+   * @param {string} downloadUrl - 下载地址
+   */
+  setDownloadConfig(version, downloadUrl) {
+    this.singboxVersion = version
+    this.singboxDownloadUrl = downloadUrl
+    log.info(`sing-box download config set: ${version} from ${downloadUrl}`)
+  }
+
+  /**
    * 获取当前 sing-box 版本
    */
   getVersion() {
-    return SINGBOX_VERSION
+    return this.singboxVersion || 'unknown'
   }
 
   /**
@@ -63,22 +69,24 @@ class SingboxAdapter {
   }
 
   /**
-   * 下载sing-box二进制（Windows）
+   * 下载sing-box二进制（从服务端配置的地址）
    */
   async downloadBinary() {
-    log.info('Downloading sing-box binary...')
-    
-    // sing-box官方下载地址（需要替换为实际版本）
-    const version = '1.9.4'
-    const downloadUrl = `https://github.com/SagerNet/sing-box/releases/download/v${version}/sing-box-${version}-windows-amd64.zip`
+    if (!this.singboxDownloadUrl || !this.singboxVersion) {
+      log.error('sing-box download URL not configured, cannot download')
+      return false
+    }
+
+    log.info(`Downloading sing-box ${this.singboxVersion} from ${this.singboxDownloadUrl}...`)
     
     try {
       const downloadPath = join(this.binDir, 'sing-box.zip')
+      const version = this.singboxVersion
       
       // 使用PowerShell下载
       const psScript = `
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri '${downloadUrl}' -OutFile '${downloadPath}'
+        Invoke-WebRequest -Uri '${this.singboxDownloadUrl}' -OutFile '${downloadPath}'
       `
       
       const { writeFileSync } = require('fs')
@@ -90,7 +98,6 @@ class SingboxAdapter {
       })
       
       // 解压
-      // 使用PowerShell解压
       const extractScript = `
         Expand-Archive -Path '${downloadPath}' -DestinationPath '${this.binDir}' -Force
         Move-Item -Path '${this.binDir}\\sing-box-${version}-windows-amd64\\sing-box.exe' -Destination '${this.binPath}' -Force

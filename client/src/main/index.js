@@ -362,11 +362,20 @@ class HQTSClient {
       
       // 选择最优节点并编译配置
       const selectedNode = this.policyEngine.selectNode(healthyNodes)
+      const serverConfig = this.configManager.getConfig()
       const config = await this.policyEngine.compileConfigWithNode(
         this.currentMode,
-        this.configManager.getConfig(),
+        serverConfig,
         selectedNode
       )
+      
+      // 设置 sing-box 下载配置（从服务端配置获取）
+      if (serverConfig?.singbox) {
+        this.singboxAdapter.setDownloadConfig(
+          serverConfig.singbox.version,
+          serverConfig.singbox.download_url
+        )
+      }
       
       await this.singboxAdapter.start(config)
       this.nodeHealthMonitor.markNodeSuccess(selectedNode.id)
@@ -462,11 +471,19 @@ class HQTSClient {
 
     // 重新编译并启动
     try {
+      const serverConfig = this.configManager.getConfig()
       const config = await this.policyEngine.compileConfigWithNode(
         this.currentMode,
-        this.configManager.getConfig(),
+        serverConfig,
         nextNode
       )
+      
+      if (serverConfig?.singbox) {
+        this.singboxAdapter.setDownloadConfig(
+          serverConfig.singbox.version,
+          serverConfig.singbox.download_url
+        )
+      }
       
       await this.singboxAdapter.start(config)
       this.nodeHealthMonitor.markNodeSuccess(nextNode.id)

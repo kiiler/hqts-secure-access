@@ -53,6 +53,13 @@ type ProductConfig struct {
 	Nodes        []Node      `json:"nodes"`
 	Features     Features    `json:"features"`
 	DNSServers   []DNSPolicy `json:"dns_servers,omitempty"`
+	Singbox      SingboxConfig `json:"singbox"`     // sing-box 下载配置
+}
+
+// sing-box 下载配置
+type SingboxConfig struct {
+	Version     string `json:"version"`      // 版本号，如 "1.9.4"
+	DownloadURL string `json:"download_url"` // 下载地址，如 "https://cdn.example.com/sing-box-1.9.4-windows-amd64.zip"
 }
 
 // 用户策略

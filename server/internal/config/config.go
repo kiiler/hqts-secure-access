@@ -28,6 +28,16 @@ var (
 	configMu      sync.RWMutex
 )
 
+const (
+	singboxVersion     = "1.9.4"
+	singboxDownloadURL = "https://github.com/SagerNet/sing-box/releases/download/v1.9.4/sing-box-1.9.4-windows-amd64.zip"
+)
+
+// 获取 sing-box 下载地址
+func getSingboxDownloadURL() string {
+	return singboxDownloadURL
+}
+
 /**
  * HandleGetConfig 获取用户配置
  * GET /api/v1/config
@@ -66,6 +76,10 @@ func HandleGetConfig(c *gin.Context) {
 		DNSServers: []models.DNSPolicy{
 			{Server: "1.1.1.1", Port: 53, Protocol: "doh"},
 			{Server: "8.8.8.8", Port: 53, Protocol: "doh"},
+		},
+		Singbox: models.SingboxConfig{
+			Version:     "1.9.4",
+			DownloadURL: getSingboxDownloadURL(),
 		},
 	}
 
