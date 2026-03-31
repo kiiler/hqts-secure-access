@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"hqts-secure-access-server/internal/admin"
@@ -63,6 +64,7 @@ func main() {
 
 		// 配置中心
 		configGroup := api.Group("/config")
+		configGroup.Use(auth.AuthMiddleware())
 		{
 			configGroup.GET("", config.HandleGetConfig) // 获取用户配置（需要认证）
 		}
@@ -92,6 +94,12 @@ func main() {
 			auditGroup.GET("/logs", audit.HandleGetLogs) // 查询审计日志
 		}
 	}
+
+	// ============================================
+	// 管理员前端页面（使用 /admin-panel 避免与 /admin/api 路由冲突）
+	// ============================================
+	adminAbsPath, _ := filepath.Abs("../admin")
+	r.Static("/admin-panel", adminAbsPath)
 
 	// ============================================
 	// 管理员 API
@@ -150,12 +158,6 @@ func main() {
 		}
 	}
 
-	// 管理员前端页面
-	r.Static("/admin", "./admin")
-	r.GET("/admin/", func(c *gin.Context) {
-		c.Redirect(301, "/admin/index.html")
-	})
-
 	// 启动服务器
 	go func() {
 		if err := r.Run(":8080"); err != nil {
@@ -164,7 +166,7 @@ func main() {
 	}()
 
 	log.Println("HQTS Secure Access Server started on :8080")
-	log.Println("Admin panel: http://localhost:8080/admin/")
+	log.Println("Admin panel: http://localhost:8080/admin-panel/")
 
 	// 优雅退出
 	quit := make(chan os.Signal, 1)

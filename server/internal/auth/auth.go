@@ -264,7 +264,21 @@ func HandleRevoke(c *gin.Context) {
 
 // 生成Token响应
 func generateTokenResponse(user *models.User) models.TokenResponse {
-	accessToken := generateRandomString(64)
+	// 生成 JWT token
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub": user.ID,
+		"user": user,
+		"exp": now.Add(jwtExpiry).Unix(),
+		"iat": now.Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	accessToken, err := token.SignedString(jwtSecret)
+	if err != nil {
+		log.Printf("Failed to sign JWT: %v", err)
+		accessToken = generateRandomString(64)
+	}
+
 	refreshToken := generateRandomString(64)
 
 	// 存储Token
@@ -334,8 +348,20 @@ func AuthMiddleware() gin.HandlerFunc {
 
 // 获取当前用户ID
 func GetCurrentUserID(c *gin.Context) string {
-	userID, _ := c.Get("userID")
-	return userID.(string)
+	userID, exists := c.Get("userID")
+	if !exists {
+		log.Printf("GetCurrentUserID: userID not found in context")
+		return ""
+	}
+	switch v := userID.(type) {
+	case string:
+		return v
+	case float64:
+		return fmt.Sprintf("%.0f", v)
+	default:
+		log.Printf("GetCurrentUserID: userID type=%T value=%v", userID, userID)
+		return fmt.Sprintf("%v", userID)
+	}
 }
 
 // 获取当前用户信息
