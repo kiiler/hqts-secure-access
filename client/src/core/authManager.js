@@ -2,34 +2,10 @@ import { app } from 'electron'
 import { join } from 'path'
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
 import log from 'electron-log'
+import { API_CONFIG, getApiUrl } from '../config.js'
 
-/**
- * AuthManager - 负责CAS认证登录态管理
- * 
- * 职责：
- * - CAS 认证流程处理
- * - Ticket 验证和用户信息获取
- * - Token存储/刷新
- * - 安全存储
- * 
- * CAS 认证流程：
- * 1. 重定向到 CAS Server 登录页
- * 2. 用户登录成功后 CAS 返回 ticket
- * 3. 客户端用 ticket 调用 /cas/serviceValidate 获取用户信息
- * 4. 获取到用户信息后生成内部 token
- */
-
-/**
- * CAS 认证配置
- */
-const CAS_CONFIG = {
-  // CAS Server 地址 - https://hubportaltest.hqts.cn
-  casServerUrl: 'https://hubportaltest.hqts.cn',
-  // 客户端回调地址
-  serviceUrl: 'hqts://auth/callback',
-  // 是否验证 SSL 证书（生产环境应设为 true）
-  rejectUnauthorized: false
-}
+// 引用全局配置（优先使用，兼容旧接口）
+const CAS_CONFIG = API_CONFIG
 
 class AuthManager {
   constructor() {
@@ -200,7 +176,7 @@ class AuthManager {
   async exchangeForInternalToken(casUser) {
     try {
       // TODO: 替换为实际的服务端地址
-      const response = await fetch('http://43.133.255.232:8080/api/v1/auth/cas/exchange', {
+      const response = await fetch(getApiUrl('/api/v1/auth/cas/exchange'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -255,7 +231,7 @@ class AuthManager {
     }
 
     try {
-      const response = await fetch('http://43.133.255.232:8080/api/v1/auth/refresh', {
+      const response = await fetch(getApiUrl('/api/v1/auth/refresh'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -295,7 +271,7 @@ class AuthManager {
     try {
       // 通知服务端使token失效
       if (this.accessToken) {
-        await fetch('http://43.133.255.232:8080/api/v1/auth/logout', {
+        await fetch(getApiUrl('/api/v1/auth/logout'), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.accessToken}`

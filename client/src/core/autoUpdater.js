@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import log from 'electron-log'
+import { getApiUrl } from '../config.js'
 
 /**
  * AutoUpdater - 客户端自动更新模块
@@ -16,7 +17,7 @@ class AutoUpdater {
     this.currentVersion = app.getVersion() || '1.0.0'
     
     // 更新服务器地址
-    this.updateServerUrl = 'http://43.133.255.232:8080/api/v1/version'
+    this.updateServerUrl = getApiUrl('/api/v1/version')
     
     // 检查更新间隔（毫秒）
     this.checkInterval = 60 * 60 * 1000 // 1小时

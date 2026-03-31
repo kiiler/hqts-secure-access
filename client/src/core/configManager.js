@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
 import log from 'electron-log'
+import { getApiUrl } from '../config.js'
 
 /**
  * ConfigManager - 配置管理
@@ -141,7 +142,7 @@ class ConfigManager {
     try {
       log.info('Fetching config from server...')
       
-      const response = await fetch('http://43.133.255.232:8080/api/v1/config', {
+      const response = await fetch(getApiUrl('/api/v1/config'), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
