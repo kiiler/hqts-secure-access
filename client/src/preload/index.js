@@ -24,7 +24,9 @@ contextBridge.exposeInMainWorld('hqtsAPI', {
 
   // 日志
   logs: {
-    export: () => ipcRenderer.invoke('logs:export')
+    export: () => ipcRenderer.invoke('logs:export'),
+    report: (level, source, message, stack) => ipcRenderer.invoke('logs:report', { level, source, message, stack }),
+    reportIssue: (source, message, stack, description) => ipcRenderer.invoke('logs:reportIssue', { source, message, stack, description })
   },
 
   // 诊断

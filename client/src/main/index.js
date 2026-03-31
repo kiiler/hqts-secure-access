@@ -7,18 +7,44 @@ import { NodeHealthMonitor } from '../core/nodeHealthMonitor'
 import { SingboxAdapter } from '../singbox-adapter'
 import { AutoUpdater } from '../core/autoUpdater'
 import log from 'electron-log'
+import { API_CONFIG, getApiUrl } from '../config.js'
 
 // 配置日志
 log.transports.file.level = 'info'
 log.transports.console.level = 'debug'
 
-// 全局异常处理
+// 向服务端上报日志的函数
+async function reportLogToServer(level, source, message, stack = '') {
+  const entry = {
+    level,
+    source,
+    message,
+    stack,
+    timestamp: new Date().toISOString(),
+    clientVersion: app.getVersion()
+  }
+  try {
+    await fetch(getApiUrl('/api/v1/client-logs'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    })
+  } catch (e) {
+    log.warn('Failed to report log to server:', e.message)
+  }
+}
+
+// 全局异常处理（主进程错误也要上报）
 process.on('uncaughtException', (error) => {
   log.error('Uncaught Exception:', error)
+  reportLogToServer('error', 'main', error.message, error.stack)
 })
 
 process.on('unhandledRejection', (reason) => {
   log.error('Unhandled Rejection:', reason)
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  const stack = reason instanceof Error ? reason.stack : ''
+  reportLogToServer('error', 'main', msg, stack)
 })
 
 class HQTSClient {
@@ -307,6 +333,21 @@ class HQTSClient {
     ipcMain.handle('logs:export', async () => {
       const logs = log.transports.file.getFile().path
       return { path: logs }
+    })
+
+    // 日志上报（渲染进程通过此通道上报日志到服务端）
+    ipcMain.handle('logs:report', async (_, { level, source, message, stack }) => {
+      await reportLogToServer(level, source, message, stack)
+      return { success: true }
+    })
+
+    // 手动报告问题
+    ipcMain.handle('logs:reportIssue', async (_, { source, message, stack, description }) => {
+      const fullMessage = description
+        ? `[用户描述] ${description}\n[原消息] ${message}`
+        : message
+      await reportLogToServer('error', source, fullMessage, stack)
+      return { success: true }
     })
 
     // 网络诊断

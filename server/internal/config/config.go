@@ -263,3 +263,60 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+// ClientLogEntry 客户端日志条目
+type ClientLogEntry struct {
+	Level     string `json:"level"`      // error, warn, info, debug
+	Message   string `json:"message"`
+	Stack     string `json:"stack,omitempty"`
+	Source    string `json:"source"`     // authManager, configManager, singboxAdapter, etc.
+	Timestamp string `json:"timestamp"`
+	UserID    string `json:"userId,omitempty"`
+	ClientVersion string `json:"clientVersion"`
+}
+
+// ClientLogs 客户端日志存储（内存中，生产环境建议用数据库
+var clientLogs []ClientLogEntry
+var clientLogsMu sync.Mutex
+
+/**
+ * HandleClientLog 接收客户端日志
+ * POST /api/v1/client-logs
+ */
+func HandleClientLog(c *gin.Context) {
+	var entry ClientLogEntry
+	if err := c.ShouldBindJSON(&entry); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 存储日志
+	clientLogsMu.Lock()
+	clientLogs = append(clientLogs, entry)
+	// 最多保留最近1000条
+	if len(clientLogs) > 1000 {
+		clientLogs = clientLogs[len(clientLogs)-1000:]
+	}
+	clientLogsMu.Unlock()
+
+	log.Printf("[ClientLog] [%s] [%s] %s - %s", 
+		entry.Level, entry.Source, entry.Timestamp, entry.Message)
+
+	c.JSON(200, gin.H{"success": true, "logId": len(clientLogs)})
+}
+
+/**
+ * HandleGetClientLogs 获取客户端日志（管理员）
+ * GET /api/v1/client-logs
+ */
+func HandleGetClientLogs(c *gin.Context) {
+	clientLogsMu.Lock()
+	logs := make([]ClientLogEntry, len(clientLogs))
+	copy(logs, clientLogs)
+	clientLogsMu.Unlock()
+
+	c.JSON(200, gin.H{
+		"logs": logs,
+		"total": len(logs),
+	})
+}

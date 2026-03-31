@@ -3,6 +3,7 @@ import { join } from 'path'
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
 import log from 'electron-log'
 import { API_CONFIG, getApiUrl } from '../config.js'
+import logger from '../logReporter.js'
 
 // 引用全局配置（优先使用，兼容旧接口）
 const CAS_CONFIG = API_CONFIG
@@ -92,6 +93,7 @@ class AuthManager {
       // 1. 用 ticket 换取用户信息 (CAS Service Validate)
       const userInfo = await this.validateTicket(ticket)
       if (!userInfo) {
+        logger.error('authManager', 'Ticket validation failed')
         throw new Error('Ticket validation failed')
       }
 
@@ -164,6 +166,7 @@ class AuthManager {
       return null
     } catch (error) {
       log.error('Ticket validation error:', error)
+      logger.error('authManager', 'Ticket validation error', error?.stack || String(error))
       throw error
     }
   }

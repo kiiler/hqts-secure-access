@@ -103,6 +103,9 @@ func main() {
 		// sing-box 二进制下载（公开接口）
 		api.GET("/singbox/:version", config.HandleDownloadSingbox) // 下载 sing-box 二进制
 
+		// 客户端日志上报（公开接口，客户端自动上报）
+		api.POST("/client-logs", config.HandleClientLog) // 接收客户端日志
+
 		// 节点目录
 		nodeGroup := api.Group("/nodes")
 		nodeGroup.Use(auth.AuthMiddleware())
@@ -185,6 +188,7 @@ func main() {
 
 			// 版本管理
 			adminProtected.GET("/version", config.HandleGetVersion)
+			adminProtected.GET("/client-logs", config.HandleGetClientLogs) // 查看客户端日志
 			adminProtected.POST("/version", config.HandleSetVersion)
 		}
 	}
