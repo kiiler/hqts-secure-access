@@ -200,7 +200,7 @@ class AuthManager {
   async exchangeForInternalToken(casUser) {
     try {
       // TODO: 替换为实际的服务端地址
-      const response = await fetch('http://localhost:8080/api/v1/auth/cas/exchange', {
+      const response = await fetch('http://43.133.255.232:8080/api/v1/auth/cas/exchange', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -255,7 +255,7 @@ class AuthManager {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/api/v1/auth/refresh', {
+      const response = await fetch('http://43.133.255.232:8080/api/v1/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -295,7 +295,7 @@ class AuthManager {
     try {
       // 通知服务端使token失效
       if (this.accessToken) {
-        await fetch('http://localhost:8080/api/v1/auth/logout', {
+        await fetch('http://43.133.255.232:8080/api/v1/auth/logout', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.accessToken}`

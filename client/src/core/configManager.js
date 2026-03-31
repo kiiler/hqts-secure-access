@@ -141,7 +141,7 @@ class ConfigManager {
     try {
       log.info('Fetching config from server...')
       
-      const response = await fetch('http://localhost:8080/api/v1/config', {
+      const response = await fetch('http://43.133.255.232:8080/api/v1/config', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
