@@ -3,6 +3,7 @@ package audit
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"hqts-secure-access-server/internal/auth"
@@ -98,7 +99,11 @@ func HandleLog(c *gin.Context) {
 func HandleGetLogs(c *gin.Context) {
 	userID := auth.GetCurrentUserID(c)
 	action := c.Query("action")
-	limit := c.DefaultQuery("limit", "50")
+	limitStr := c.DefaultQuery("limit", "50")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit <= 0 {
+		limit = 50
+	}
 
 	var logs []models.AuditLog
 	query := db.Where("user_id = ?", userID)
@@ -107,7 +112,7 @@ func HandleGetLogs(c *gin.Context) {
 		query = query.Where("action = ?", action)
 	}
 
-	query = query.Order("created_at DESC").Limit(50)
+	query = query.Order("created_at DESC").Limit(limit)
 	if err := query.Find(&logs).Error; err != nil {
 		log.Printf("Failed to query audit logs: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query logs"})

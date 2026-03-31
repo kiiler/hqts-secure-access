@@ -29,10 +29,10 @@ import (
 var (
 	// CAS 配置 - 需要替换为实际的泛微OA地址
 	casConfig = struct {
-		CasServerURL string // https://oa.hqts.cn/cas
+		CasServerURL string // https://hubportaltest.hqts.cn
 		ServiceURL   string // hqts://auth/callback
 	}{
-		CasServerURL: "https://oa.hqts.cn/cas",
+		CasServerURL: "https://hubportaltest.hqts.cn",
 		ServiceURL:   "hqts://auth/callback",
 	}
 

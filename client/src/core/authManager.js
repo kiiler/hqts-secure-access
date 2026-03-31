@@ -23,8 +23,8 @@ import log from 'electron-log'
  * CAS 认证配置
  */
 const CAS_CONFIG = {
-  // CAS Server 地址 - 需要替换为实际的泛微OA地址
-  casServerUrl: 'https://oa.hqts.cn/cas',
+  // CAS Server 地址 - https://hubportaltest.hqts.cn
+  casServerUrl: 'https://hubportaltest.hqts.cn',
   // 客户端回调地址
   serviceUrl: 'hqts://auth/callback',
   // 是否验证 SSL 证书（生产环境应设为 true）

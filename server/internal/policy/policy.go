@@ -102,10 +102,7 @@ func IsModeAllowed(userID string, group string, mode string) bool {
  * 获取强制模式（如果有）
  */
 func GetForceMode(userID string, group string) *string {
-	policy := GetUserPolicy(userID, group)
-	
 	// 某些特殊用户可能被强制指定模式
 	// 这里简化处理，返回nil表示不强制
-	
-	return policy.DefaultMode
+	return nil
 }

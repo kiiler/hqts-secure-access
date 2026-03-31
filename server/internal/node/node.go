@@ -20,59 +20,88 @@ import (
  */
 
 var (
-	// 模拟节点数据 - 实际应从数据库或配置中心获取
+	// 节点数据 - 来自 HQTS 真实节点配置
 	mockNodes = []models.Node{
+		// Shadowsocks 节点 (c73s1)
 		{
-			ID:       "hk-01",
-			Region:   "HK",
+			ID:       "c73s1",
+			Region:   "SG",
 			Priority: 1,
-			Host:     "hk-01.hqts.cn",
-			Port:     443,
-			Protocol: "vmess",
-			UUID:     "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			AlterId:  4,
-			TLS:      true,
+			Host:     "c73s1.portablesubmarines.com",
+			Port:     5079,
+			Protocol: "shadowsocks",
+			Password: "Ka8GnmuJL3WwfWSw",
+			Method:   "aes-256-gcm",
 		},
+		// Shadowsocks 节点 (c73s2)
 		{
-			ID:       "hk-02",
-			Region:   "HK",
+			ID:       "c73s2",
+			Region:   "SG",
 			Priority: 2,
-			Host:     "hk-02.hqts.cn",
-			Port:     443,
-			Protocol: "vless",
-			UUID:     "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-			Flow:     "xtls-rprx-vision",
-			TLS:      true,
+			Host:     "c73s2.portablesubmarines.com",
+			Port:     5079,
+			Protocol: "shadowsocks",
+			Password: "Ka8GnmuJL3WwfWSw",
+			Method:   "aes-256-gcm",
 		},
+		// VMess 节点 (c73s3)
 		{
-			ID:       "sg-01",
+			ID:       "c73s3",
 			Region:   "SG",
 			Priority: 3,
-			Host:     "sg-01.hqts.cn",
-			Port:     443,
-			Protocol: "trojan",
-			Password: "trojan-password-123",
-			TLS:      true,
-		},
-		{
-			ID:       "us-01",
-			Region:   "US",
-			Priority: 4,
-			Host:     "us-01.hqts.cn",
-			Port:     443,
+			Host:     "c73s3.portablesubmarines.com",
+			Port:     5079,
 			Protocol: "vmess",
-			UUID:     "c3d4e5f6-a7b8-9012-cdef-123456789012",
-			AlterId:  4,
-			TLS:      true,
+			UUID:     "badb8e19-e0e8-4bf7-8ce3-f60f59a379e7",
+			AlterId:  0,
+			TLS:      false,
+		},
+		// VMess 节点 (c73s4)
+		{
+			ID:       "c73s4",
+			Region:   "SG",
+			Priority: 4,
+			Host:     "c73s4.portablesubmarines.com",
+			Port:     5079,
+			Protocol: "vmess",
+			UUID:     "badb8e19-e0e8-4bf7-8ce3-f60f59a379e7",
+			AlterId:  0,
+			TLS:      false,
+		},
+		// VMess 节点 (c73s5)
+		{
+			ID:       "c73s5",
+			Region:   "SG",
+			Priority: 5,
+			Host:     "c73s5.portablesubmarines.com",
+			Port:     5079,
+			Protocol: "vmess",
+			UUID:     "badb8e19-e0e8-4bf7-8ce3-f60f59a379e7",
+			AlterId:  0,
+			TLS:      false,
+		},
+		// VMess 节点 (c73s4801)
+		{
+			ID:       "c73s4801",
+			Region:   "SG",
+			Priority: 6,
+			Host:     "c73s4801.portablesubmarines.com",
+			Port:     5079,
+			Protocol: "vmess",
+			UUID:     "badb8e19-e0e8-4bf7-8ce3-f60f59a379e7",
+			AlterId:  0,
+			TLS:      false,
 		},
 	}
 
 	// 节点健康状态
 	nodeHealth = map[string]*models.NodeHealth{
-		"hk-01": {NodeID: "hk-01", Online: true, Latency: 15, Load: 35.5, Bandwidth: "100GB"},
-		"hk-02": {NodeID: "hk-02", Online: true, Latency: 18, Load: 42.1, Bandwidth: "80GB"},
-		"sg-01": {NodeID: "sg-01", Online: true, Latency: 35, Load: 55.2, Bandwidth: "60GB"},
-		"us-01": {NodeID: "us-01", Online: true, Latency: 150, Load: 20.0, Bandwidth: "200GB"},
+		"c73s1":    {NodeID: "c73s1",    Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
+		"c73s2":    {NodeID: "c73s2",    Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
+		"c73s3":    {NodeID: "c73s3",    Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
+		"c73s4":    {NodeID: "c73s4",    Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
+		"c73s5":    {NodeID: "c73s5",    Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
+		"c73s4801": {NodeID: "c73s4801", Online: true, Latency: 0, Load: 0, Bandwidth: "unknown"},
 	}
 
 	healthMu sync.RWMutex
@@ -84,7 +113,7 @@ var (
  */
 func HandleListNodes(c *gin.Context) {
 	// 返回所有可用节点
-	nodes := getAvailableNodes()
+	nodes := GetAvailableNodes()
 	c.JSON(200, gin.H{
 		"nodes": nodes,
 		"total": len(nodes),
