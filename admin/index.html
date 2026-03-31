@@ -744,7 +744,7 @@
       try {
         await fetch(`${API_BASE}/logout`, {
           method: 'POST',
-          headers: { getAuthHeader() }
+          headers: getAuthHeader()
         })
       } catch {}
 

@@ -2,7 +2,7 @@
   "name": "hqts-secure-access-client",
   "version": "1.0.0",
   "description": "HQTS Secure Access Client based on sing-box",
-  "main": "dist/main.js",
+  "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

@@ -99,7 +99,7 @@ class HQTSClient {
     if (process.env.ELECTRON_RENDERER_URL) {
       await this.mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
     } else {
-      await this.mainWindow.loadFile(join(__dirname, '../ui/index.html'))
+      await this.mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
     }
 
     log.info('Main window created')
